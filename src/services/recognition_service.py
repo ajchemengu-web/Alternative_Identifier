@@ -7,9 +7,9 @@ import numpy as np
 from insightface.app import FaceAnalysis
 
 
-# ==========================================
+# ============================================================
 # PATHS
-# ==========================================
+# ============================================================
 
 DATABASE_PATH = os.path.join(
     "data",
@@ -27,13 +27,14 @@ GUEST_EMBEDDINGS_FOLDER = os.path.join(
     "embeddings"
 )
 
-
 MATCH_THRESHOLD = 0.50
 
+CACHE_REFRESH_INTERVAL = 10
 
-# ==========================================
+
+# ============================================================
 # LOAD AI MODEL
-# ==========================================
+# ============================================================
 
 print("Loading Face Recognition AI...")
 
@@ -47,159 +48,350 @@ app.prepare(
     det_size=(640, 640)
 )
 
-print("✅ Face Recognition AI ready!")
+print("Face Recognition AI ready!")
 
 
-# ==========================================
-# DATABASE CONNECTION
-# ==========================================
+# ============================================================
+# DATABASE
+# ============================================================
 
 def get_connection():
 
-    connection = sqlite3.connect(DATABASE_PATH)
+    connection = sqlite3.connect(
+        DATABASE_PATH
+    )
 
     connection.row_factory = sqlite3.Row
 
     return connection
 
 
-# ==========================================
-# LOAD STUDENT IDENTITIES
-# ==========================================
+# ============================================================
+# IDENTITY CACHE
+# ============================================================
 
-def load_students():
+class IdentityCache:
 
-    students = []
+    def __init__(self):
 
-    connection = get_connection()
-    cursor = connection.cursor()
+        self.students = []
+        self.guests = []
 
-    cursor.execute("""
-        SELECT
-            student_id,
-            full_name,
-            admission_number,
-            hostel,
-            room,
-            embedding_file
-        FROM students
-    """)
+        self.last_refresh = 0
 
-    rows = cursor.fetchall()
-
-    connection.close()
+        self.refresh()
 
 
-    for student in rows:
+    # ========================================================
+    # LOAD STUDENTS
+    # ========================================================
 
-        embedding_path = os.path.join(
-            STUDENT_EMBEDDINGS_FOLDER,
-            student["embedding_file"]
-        )
+    def load_students(self):
 
-        if os.path.exists(embedding_path):
+        students = []
 
-            embedding = np.load(embedding_path)
+        connection = get_connection()
+        cursor = connection.cursor()
 
-            embedding = embedding / np.linalg.norm(embedding)
+        cursor.execute("""
+            SELECT
+                student_id,
+                full_name,
+                admission_number,
+                hostel,
+                room,
+                embedding_file
+            FROM students
+        """)
 
-            students.append({
-                "student_id": student["student_id"],
-                "full_name": student["full_name"],
-                "admission_number": student["admission_number"],
-                "hostel": student["hostel"],
-                "room": student["room"],
-                "embedding": embedding
-            })
+        rows = cursor.fetchall()
 
-    return students
+        connection.close()
 
+        for student in rows:
 
-# ==========================================
-# LOAD ACTIVE GUESTS
-# ==========================================
-
-def load_active_guests():
-
-    guests = []
-
-    connection = get_connection()
-    cursor = connection.cursor()
-
-    cursor.execute("""
-        SELECT
-            guest_id,
-            embedding_file,
-            expires_at
-        FROM guests
-        WHERE status = ?
-    """, ("AG",))
-
-    rows = cursor.fetchall()
-
-    connection.close()
-
-
-    now = datetime.now()
-
-
-    for guest in rows:
-
-        # Skip malformed expiry values
-        if not guest["expires_at"]:
-            continue
-
-        try:
-            expires_at = datetime.fromisoformat(
-                guest["expires_at"]
+            embedding_path = os.path.join(
+                STUDENT_EMBEDDINGS_FOLDER,
+                student["embedding_file"]
             )
-        except ValueError:
-            continue
+
+            if not os.path.exists(embedding_path):
+
+                print(
+                    "[IDENTITY CACHE] "
+                    f"Embedding missing: "
+                    f"{embedding_path}"
+                )
+
+                continue
+
+            try:
+
+                embedding = np.load(
+                    embedding_path
+                )
+
+                embedding = embedding.astype(
+                    np.float32
+                )
+
+                norm = np.linalg.norm(
+                    embedding
+                )
+
+                if norm == 0:
+
+                    print(
+                        "[IDENTITY CACHE] "
+                        f"Invalid embedding: "
+                        f"{embedding_path}"
+                    )
+
+                    continue
+
+                embedding = embedding / norm
+
+                students.append({
+
+                    "student_id":
+                        student["student_id"],
+
+                    "full_name":
+                        student["full_name"],
+
+                    "admission_number":
+                        student["admission_number"],
+
+                    "hostel":
+                        student["hostel"],
+
+                    "room":
+                        student["room"],
+
+                    "embedding":
+                        embedding
+                })
+
+            except Exception as error:
+
+                print(
+                    "[IDENTITY CACHE] "
+                    f"Failed to load "
+                    f"{embedding_path}: {error}"
+                )
+
+        return students
 
 
-        # Skip expired guests
-        if now >= expires_at:
-            continue
+    # ========================================================
+    # LOAD ACTIVE GUESTS
+    # ========================================================
+
+    def load_active_guests(self):
+
+        guests = []
+
+        connection = get_connection()
+        cursor = connection.cursor()
+
+        # Your current guest system stores embedding_file.
+        # We therefore select it directly.
+
+        cursor.execute("""
+            SELECT
+                guest_id,
+                embedding_file,
+                expires_at
+            FROM guests
+            WHERE status = ?
+        """, ("AG",))
+
+        rows = cursor.fetchall()
+
+        connection.close()
+
+        now = datetime.now()
+
+        for guest in rows:
+
+            if not guest["expires_at"]:
+                continue
+
+            try:
+
+                expires_at = datetime.fromisoformat(
+                    guest["expires_at"]
+                )
+
+            except ValueError:
+
+                continue
+
+            # Ignore expired guests
+            if now >= expires_at:
+                continue
+
+            embedding_path = os.path.join(
+                GUEST_EMBEDDINGS_FOLDER,
+                guest["embedding_file"]
+            )
+
+            if not os.path.exists(
+                embedding_path
+            ):
+
+                print(
+                    "[IDENTITY CACHE] "
+                    f"Guest embedding missing: "
+                    f"{embedding_path}"
+                )
+
+                continue
+
+            try:
+
+                embedding = np.load(
+                    embedding_path
+                )
+
+                embedding = embedding.astype(
+                    np.float32
+                )
+
+                norm = np.linalg.norm(
+                    embedding
+                )
+
+                if norm == 0:
+                    continue
+
+                embedding = embedding / norm
+
+                guests.append({
+
+                    "guest_id":
+                        guest["guest_id"],
+
+                    "expires_at":
+                        expires_at,
+
+                    "embedding":
+                        embedding
+                })
+
+            except Exception as error:
+
+                print(
+                    "[IDENTITY CACHE] "
+                    f"Guest embedding error: "
+                    f"{error}"
+                )
+
+        return guests
 
 
-        embedding_path = os.path.join(
-            GUEST_EMBEDDINGS_FOLDER,
-            guest["embedding_file"]
+    # ========================================================
+    # REFRESH CACHE
+    # ========================================================
+
+    def refresh(self):
+
+        print(
+            "\n[IDENTITY CACHE] "
+            "Refreshing identities..."
         )
 
-        if os.path.exists(embedding_path):
+        self.students = (
+            self.load_students()
+        )
 
-            embedding = np.load(embedding_path)
+        self.guests = (
+            self.load_active_guests()
+        )
 
-            embedding = embedding / np.linalg.norm(embedding)
+        self.last_refresh = (
+            __import__("time").time()
+        )
 
-            guests.append({
-                "guest_id": guest["guest_id"],
-                "expires_at": expires_at,
-                "embedding": embedding
-            })
+        print(
+            "[IDENTITY CACHE] "
+            f"Students loaded: "
+            f"{len(self.students)}"
+        )
 
-    return guests
+        print(
+            "[IDENTITY CACHE] "
+            f"Guests loaded: "
+            f"{len(self.guests)}"
+        )
 
 
-# ==========================================
+    # ========================================================
+    # REFRESH WHEN NEEDED
+    # ========================================================
+
+    def refresh_if_needed(self):
+
+        import time
+
+        elapsed = (
+            time.time()
+            - self.last_refresh
+        )
+
+        if elapsed >= CACHE_REFRESH_INTERVAL:
+
+            self.refresh()
+
+
+# ============================================================
+# GLOBAL CACHE
+# ============================================================
+
+identity_cache = IdentityCache()
+
+
+# ============================================================
 # FIND BEST MATCH
-# ==========================================
+# ============================================================
 
 def find_best_match(
     face_embedding,
     identities
 ):
 
-    best_match = None
-    best_score = -1
+    if not identities:
 
+        return None, 0.0
+
+    face_embedding = (
+        face_embedding.astype(
+            np.float32
+        )
+    )
+
+    norm = np.linalg.norm(
+        face_embedding
+    )
+
+    if norm == 0:
+
+        return None, 0.0
+
+    face_embedding = (
+        face_embedding / norm
+    )
+
+    best_match = None
+    best_score = -1.0
 
     for identity in identities:
 
-        score = np.dot(
-            face_embedding,
-            identity["embedding"]
+        score = float(
+            np.dot(
+                face_embedding,
+                identity["embedding"]
+            )
         )
 
         if score > best_score:
@@ -207,97 +399,128 @@ def find_best_match(
             best_score = score
             best_match = identity
 
+    if best_score >= MATCH_THRESHOLD:
 
-    return best_match, best_score
+        return best_match, best_score
+
+    return None, best_score
+
+
+# ============================================================
+# RECOGNIZE EMBEDDING
+# ============================================================
 
 def recognize_embedding(face_embedding):
 
-    # Normalize embedding
+    identity_cache.refresh_if_needed()
+
     embedding = (
         face_embedding /
         np.linalg.norm(face_embedding)
     )
 
 
-    # ======================================
-    # CHECK STUDENTS
-    # ======================================
+    # ========================================================
+    # STUDENTS
+    # ========================================================
 
-    students = load_students()
-
-    student_match, student_score = find_best_match(
-        embedding,
-        students
+    student_match, student_score = (
+        find_best_match(
+            embedding,
+            identity_cache.students
+        )
     )
 
-
-    if (
-        student_match is not None
-        and student_score >= MATCH_THRESHOLD
-    ):
+    if student_match is not None:
 
         return {
+
             "status": "STUDENT",
-            "student_id": student_match["student_id"],
-            "full_name": student_match["full_name"],
-            "admission_number": student_match[
-                "admission_number"
-            ],
-            "hostel": student_match["hostel"],
-            "room": student_match["room"],
-            "recognition_score": float(student_score)
+
+            "student_id":
+                student_match["student_id"],
+
+            "full_name":
+                student_match["full_name"],
+
+            "admission_number":
+                student_match["admission_number"],
+
+            "hostel":
+                student_match["hostel"],
+
+            "room":
+                student_match["room"],
+
+            "recognition_score":
+                float(student_score)
         }
 
 
-    # ======================================
-    # CHECK ACTIVE GUESTS
-    # ======================================
+    # ========================================================
+    # ADMITTED GUESTS
+    # ========================================================
 
-    guests = load_active_guests()
-
-    guest_match, guest_score = find_best_match(
-        embedding,
-        guests
+    guest_match, guest_score = (
+        find_best_match(
+            embedding,
+            identity_cache.guests
+        )
     )
 
-
-    if (
-        guest_match is not None
-        and guest_score >= MATCH_THRESHOLD
-    ):
+    if guest_match is not None:
 
         return {
+
             "status": "ADMITTED_GUEST",
-            "guest_id": guest_match["guest_id"],
-            "expires_at": guest_match[
-                "expires_at"
-            ].isoformat(),
-            "recognition_score": float(guest_score)
+
+            "guest_id":
+                guest_match["guest_id"],
+
+            "expires_at":
+                guest_match["expires_at"].isoformat(),
+
+            "recognition_score":
+                float(guest_score)
         }
 
 
-    # ======================================
+    # ========================================================
     # UNKNOWN
-    # ======================================
+    # ========================================================
 
     return {
+
         "status": "UNKNOWN",
-        "message": (
+
+        "message":
             "Face does not match any "
-            "authorized identity"
-        )
+            "authorized identity",
+
+        "recognition_score":
+            float(
+                max(
+                    student_score,
+                    guest_score
+                )
+            )
     }
 
 
-# ==========================================
+# ============================================================
 # RECOGNIZE IMAGE
-# ==========================================
+# ============================================================
 
 def recognize_image(image):
 
-    # Detect faces
-    faces = app.get(image)
+    if image is None:
 
+        return {
+            "status": "NO_FACE",
+            "message": "No image provided"
+        }
+
+    faces = app.get(image)
 
     if not faces:
 
@@ -306,76 +529,8 @@ def recognize_image(image):
             "message": "No face detected"
         }
 
-
-    # For now, process the first face
     face = faces[0]
 
-    embedding = face.embedding
-
-    embedding = (
-        embedding /
-        np.linalg.norm(embedding)
+    return recognize_embedding(
+        face.embedding
     )
-
-
-    # ======================================
-    # CHECK STUDENTS
-    # ======================================
-
-    students = load_students()
-
-    student_match, student_score = find_best_match(
-        embedding,
-        students
-    )
-
-
-    if (
-        student_match is not None
-        and student_score >= MATCH_THRESHOLD
-    ):
-
-        return {
-            "status": "STUDENT",
-            "student_id": student_match["student_id"],
-            "full_name": student_match["full_name"],
-            "admission_number": student_match["admission_number"],
-            "hostel": student_match["hostel"],
-            "room": student_match["room"],
-            "recognition_score": float(student_score)
-        }
-
-
-    # ======================================
-    # CHECK ACTIVE GUESTS
-    # ======================================
-
-    guests = load_active_guests()
-
-    guest_match, guest_score = find_best_match(
-        embedding,
-        guests
-    )
-
-
-    if (
-        guest_match is not None
-        and guest_score >= MATCH_THRESHOLD
-    ):
-
-        return {
-            "status": "ADMITTED_GUEST",
-            "guest_id": guest_match["guest_id"],
-            "expires_at": guest_match["expires_at"].isoformat(),
-            "recognition_score": float(guest_score)
-        }
-
-
-    # ======================================
-    # UNKNOWN
-    # ======================================
-
-    return {
-        "status": "UNKNOWN",
-        "message": "Face does not match any authorized identity"
-    }
