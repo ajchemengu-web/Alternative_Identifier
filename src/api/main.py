@@ -144,6 +144,7 @@ def get_access_logs():
             person_identifier,
             entrance,
             recognition_score,
+            liveness_score,
             decision,
             guard_id,
             timestamp
