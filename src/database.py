@@ -79,6 +79,37 @@ def initialize_database():
 
 
     # =========================================
+    # USERS TABLE (Enrollment Dashboard, docs/PRD.md §5)
+    # =========================================
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS users (
+
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+        username TEXT UNIQUE NOT NULL,
+
+        password_hash TEXT NOT NULL,
+
+        email TEXT UNIQUE NOT NULL,
+
+        role TEXT NOT NULL,
+
+        admin_tier TEXT,
+
+        linked_person_id TEXT,
+
+        temp_expires_at DATETIME,
+
+        is_active INTEGER NOT NULL DEFAULT 1,
+
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+
+    )
+    """)
+
+
+    # =========================================
     # ACCESS LOGS TABLE
     # =========================================
 

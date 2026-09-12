@@ -1,4 +1,6 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException
+from pydantic import BaseModel
+from typing import Optional
 import numpy as np
 import cv2
 import sqlite3
@@ -11,6 +13,7 @@ from src.services.guard_service import (
     admit_unknown_person,
     reject_unknown_person
 )
+from src.services import auth_service
 
 
 app = FastAPI(
@@ -247,5 +250,100 @@ def reject_person(
     result = reject_unknown_person(
         unknown_id
     )
+
+    return result
+
+
+# ==========================================
+# ENROLLMENT DASHBOARD (docs/PRD.md §5)
+# ==========================================
+#
+# No session/auth middleware protects these yet — see the note at
+# the top of src/services/auth_service.py. In particular, nothing
+# stops an unauthenticated caller from hitting /enroll directly;
+# that needs to change before this is exposed beyond a trusted admin
+# tool, same as the rest of this prototype's open endpoints.
+
+class EnrollRequest(BaseModel):
+
+    username: str
+    password: str
+    email: str
+    role: str
+    admin_tier: Optional[str] = None
+    linked_person_id: Optional[str] = None
+
+
+class LoginRequest(BaseModel):
+
+    username: str
+    password: str
+
+
+@app.post("/enroll")
+def enroll(request: EnrollRequest):
+
+    try:
+
+        result = auth_service.create_user(
+            username=request.username,
+            password=request.password,
+            email=request.email,
+            role=request.role,
+            admin_tier=request.admin_tier,
+            linked_person_id=request.linked_person_id
+        )
+
+    except ValueError as error:
+
+        raise HTTPException(
+            status_code=400,
+            detail=str(error)
+        )
+
+    except Exception:
+
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Could not create user — username or email "
+                "may already be in use."
+            )
+        )
+
+    return result
+
+
+@app.post("/login")
+def login(request: LoginRequest):
+
+    result = auth_service.authenticate(
+        request.username,
+        request.password
+    )
+
+    if result is None:
+
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid credentials"
+        )
+
+    return result
+
+
+@app.post("/admin/temporary-admins/{username}/complete")
+def complete_temporary_admin_task(username: str):
+
+    result = auth_service.mark_temporary_admin_task_complete(
+        username
+    )
+
+    if not result["success"]:
+
+        raise HTTPException(
+            status_code=404,
+            detail=result["message"]
+        )
 
     return result

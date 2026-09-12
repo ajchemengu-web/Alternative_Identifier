@@ -49,6 +49,19 @@ create table if not exists unknown_persons (
     reviewed_by text
 );
 
+create table if not exists users (
+    id bigint generated always as identity primary key,
+    username text unique not null,
+    password_hash text not null,
+    email text unique not null,
+    role text not null,
+    admin_tier text,
+    linked_person_id text,
+    temp_expires_at timestamptz,
+    is_active boolean not null default true,
+    created_at timestamptz not null default now()
+);
+
 create table if not exists access_logs (
     id bigint generated always as identity primary key,
     person_type text not null,
@@ -82,3 +95,4 @@ alter table students enable row level security;
 alter table guests enable row level security;
 alter table unknown_persons enable row level security;
 alter table access_logs enable row level security;
+alter table users enable row level security;
