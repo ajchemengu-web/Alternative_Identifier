@@ -1,0 +1,15 @@
+fastapi>=0.110,<1.0
+uvicorn[standard]>=0.27,<1.0
+python-multipart>=0.0.9
+
+opencv-python-headless>=4.9,<5.0
+numpy>=1.26,<3.0
+insightface>=0.7,<1.0
+onnxruntime>=1.17,<2.0
+
+# Only imported when DATABASE_URL is set (src/db.py) — i.e. when the
+# app is pointed at Supabase/Postgres instead of the default SQLite
+# local-dev database.
+psycopg2-binary>=2.9,<3.0
+
+python-dotenv>=1.0,<2.0

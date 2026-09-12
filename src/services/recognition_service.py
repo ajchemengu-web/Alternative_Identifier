@@ -6,17 +6,13 @@ import cv2
 import numpy as np
 from insightface.app import FaceAnalysis
 
+from src.db import get_connection as _get_raw_connection
 from src.services.liveness_service import check_liveness
 
 
 # ============================================================
 # PATHS
 # ============================================================
-
-DATABASE_PATH = os.path.join(
-    "data",
-    "smarthostel.db"
-)
 
 STUDENT_EMBEDDINGS_FOLDER = os.path.join(
     "data",
@@ -59,9 +55,7 @@ print("Face Recognition AI ready!")
 
 def get_connection():
 
-    connection = sqlite3.connect(
-        DATABASE_PATH
-    )
+    connection = _get_raw_connection()
 
     connection.row_factory = sqlite3.Row
 

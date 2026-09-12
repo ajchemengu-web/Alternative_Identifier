@@ -1,12 +1,6 @@
-import sqlite3
-import os
 from datetime import datetime
 
-
-DATABASE_PATH = os.path.join(
-    "data",
-    "smarthostel.db"
-)
+from src.db import get_connection
 
 
 def log_access(
@@ -19,7 +13,7 @@ def log_access(
     liveness_score=None
 ):
 
-    connection = sqlite3.connect(DATABASE_PATH)
+    connection = get_connection()
 
     cursor = connection.cursor()
 

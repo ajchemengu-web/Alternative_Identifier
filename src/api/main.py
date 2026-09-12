@@ -1,9 +1,9 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException
 import numpy as np
 import cv2
-import os
 import sqlite3
 from datetime import datetime
+from src.db import get_connection as _get_raw_connection
 from src.services.recognition_service import recognize_image
 from src.services.access_service import process_access
 from src.services.guard_service import (
@@ -20,19 +20,13 @@ app = FastAPI(
 )
 
 
-DATABASE_PATH = os.path.join(
-    "data",
-    "smarthostel.db"
-)
-
-
 # ==========================================
 # DATABASE CONNECTION
 # ==========================================
 
 def get_connection():
 
-    connection = sqlite3.connect(DATABASE_PATH)
+    connection = _get_raw_connection()
 
     connection.row_factory = sqlite3.Row
 

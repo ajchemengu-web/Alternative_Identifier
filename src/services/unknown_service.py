@@ -1,22 +1,17 @@
 import os
-import sqlite3
 import uuid
 from datetime import datetime
 
 import cv2
 import numpy as np
 
+from src.db import get_connection
 from src.services.recognition_service import app
 
 
 # ==========================================
 # PATHS
 # ==========================================
-
-DATABASE_PATH = os.path.join(
-    "data",
-    "smarthostel.db"
-)
 
 UNKNOWN_IMAGES_FOLDER = os.path.join(
     "data",
@@ -46,15 +41,6 @@ os.makedirs(
 # ==========================================
 
 UNKNOWN_MATCH_THRESHOLD = 0.55
-
-
-# ==========================================
-# DATABASE CONNECTION
-# ==========================================
-
-def get_connection():
-
-    return sqlite3.connect(DATABASE_PATH)
 
 
 # ==========================================

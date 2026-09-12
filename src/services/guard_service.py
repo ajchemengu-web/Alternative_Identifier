@@ -3,11 +3,9 @@ import sqlite3
 import shutil
 from datetime import datetime, timedelta
 
+from src.db import get_connection as _get_raw_connection
 
-DATABASE_PATH = os.path.join(
-    "data",
-    "smarthostel.db"
-)
+
 UNKNOWN_EMBEDDINGS_FOLDER = os.path.join(
     "data",
     "unknowns",
@@ -34,9 +32,7 @@ os.makedirs(
 
 def get_connection():
 
-    connection = sqlite3.connect(
-        DATABASE_PATH
-    )
+    connection = _get_raw_connection()
 
     connection.row_factory = sqlite3.Row
 
