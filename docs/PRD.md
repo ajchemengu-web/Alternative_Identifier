@@ -4,7 +4,7 @@
 | | |
 |---|---|
 | **Product** | Smart Gen (SmartAccess + SmartAttendance) |
-| **Status** | Draft v1.0 — for review |
+| **Status** | v1.1 — key architecture decisions confirmed (§11) |
 | **Author** | Drafted with Claude, from founder's handwritten design notes |
 | **Repos** | `smart-gen.com` (web platform), `Alternative_Identifier` (recognition engine / prototype) |
 
@@ -55,10 +55,12 @@ systematic way to flag or correct misidentifications.
 
 **Non-goals (v1)**
 - Payments, visitor pre-registration/booking, or public guest self-service.
-- Cross-institution federation (multi-tenant SaaS) — v1 targets a single
-  institution deployment, though the data model should not preclude it later.
-- Liveness/anti-spoofing beyond what the chosen recognition library provides
-  out of the box (flagged as a risk in §9).
+- Cross-institution federation (multi-tenant SaaS). **Decision:** v1 targets
+  a single institution only — the data model does not need a tenant/campus
+  layer built in ahead of time; that becomes a migration if Smart Gen is
+  ever deployed to a second institution.
+- Attendance/presence tracking for non-teaching Staff (see §7.4) — Staff are
+  in scope for SmartAccess only.
 
 ---
 
@@ -183,6 +185,18 @@ A face presented at a checkpoint camera resolves to one of two outcomes:
 - **Unknown guest** → the frame's facial data is stored **temporarily** and
   surfaced to the guard for an Admit/Reject decision.
 
+**Decision:** verified members are **auto-admitted** — the recognition
+engine grants access directly with no guard step. The guard's queue and
+Admit/Reject action exist only for unknown faces; this keeps checkpoint
+throughput fast and matches how the guard dashboard is scoped in §6.2.
+
+**Decision:** liveness/anti-spoofing detection (rejecting a photo-of-a-photo
+or video-replay presented to the camera) is **in scope for v1**, not a
+fast-follow — since verified members bypass a human guard entirely, the
+recognition engine itself is the only checkpoint against a spoofed face and
+must be hardened before auto-admit ships. See §10 and §13 for how this
+lands in the stack and rollout.
+
 **Guest data lifecycle**
 - On admit: guest record (and face data) remains valid for **24 hours**.
   If the same face reappears at any checkpoint within that window, their
@@ -295,7 +309,16 @@ Shared app shell ("SmartAttendance"), same platform, role-specific content.
   and announcements the person actually receives; an unenrolled record gets
   none of the above until flipped to Yes by an admin.
 
-### 7.4 Timetabling → Schedule pipeline
+### 7.4 Staff scope (decision)
+
+Non-teaching Staff are **SmartAccess-only** — they are enrolled and
+recognized at checkpoints like any verified member, but they do not have
+classes, so there is no SmartAttendance presence/clock-in record for them
+in v1. If HR-style staff attendance is ever wanted, it should be scoped as
+a separate feature rather than overloaded onto the classroom-attendance
+pipeline described above.
+
+### 7.5 Timetabling → Schedule pipeline
 
 The **Directorate of Timetabling Admin** creates/updates/cancels timetables
 per course and year; on upload, students are **automatically enrolled into
@@ -332,8 +355,12 @@ in their profile determines what they see.
    - Rejected guest facial data → deleted immediately.
    - Admitted guest facial data → deleted automatically 24 hours after
      admission.
-   - Student data → **auto-deleted after graduation**, timed to the
-     student's course duration.
+   - Student data → deleted after graduation. **Decision:** this is
+     triggered by an **explicit admin action** (an admin, e.g. the Dean or
+     Original Admin, marks the student as graduated/exited), not a date
+     auto-computed from enrollment date + course duration — this avoids
+     wrongly purging a student who repeats a year or whose course length
+     changes mid-programme.
 5. **Security & encryption.** Biometric data (face embeddings, reference
    images) must be encrypted at rest and in transit; this is explicitly
    called out as a hard requirement, not an optional hardening pass. Given
@@ -355,7 +382,7 @@ in their profile determines what they see.
 
 | Layer | Choice | Notes |
 |---|---|---|
-| Recognition engine / API | **FastAPI** + InsightFace (already prototyped) | `Alternative_Identifier` |
+| Recognition engine / API | **FastAPI** + InsightFace (already prototyped) | `Alternative_Identifier`; needs a liveness/anti-spoofing check added ahead of auto-admit (§13 Phase 1) |
 | Student/Lecturer app | **Flutter** | SmartAttendance mobile-first, cross-platform |
 | Web dashboards (Admin/Guard/Enrollment) | **Web app**, deployed on **Vercel** | `smart-gen.com` |
 | Database / Auth | **Supabase** (Postgres + RLS + Auth/Storage) | replaces the current SQLite prototype for production |
@@ -369,20 +396,19 @@ data needs are implemented, plus Row-Level Security policies per role.
 
 ---
 
-## 11. Open Questions (need founder decision before implementation)
+## 11. Decisions Log
 
-1. For a **verified** member at a SmartAccess checkpoint, does the gate
-   auto-admit, or does a guard still confirm every entry (verified and
-   unknown alike)? §6.1 assumes auto-admit for verified members.
-2. What exactly triggers "graduation" for the student data auto-delete rule
-   — a manual admin action, or a computed date from enrollment date + course
-   duration?
-3. Should Staff (non-teaching) go through SmartAccess only, or also need an
-   attendance/presence record like students/lecturers?
-4. Anti-spoofing / liveness detection (photo-of-a-photo attacks) — in scope
-   for v1 or a fast-follow?
-5. Multi-campus / multi-entrance support — is one institution's full rollout
-   the entire v1 scope, or should the data model be multi-tenant from day one?
+The following calls were open questions in draft v1.0 and have since been
+made by the founder; they are reflected throughout this document and
+recorded here for traceability.
+
+| # | Question | Decision |
+|---|---|---|
+| 1 | Does a verified member auto-admit at a checkpoint, or does a guard confirm every entry? | **Auto-admit verified members.** Guard queue exists only for unknown guests (§6.1). |
+| 2 | What triggers the student data-deletion rule after graduation? | **Explicit admin action**, not a computed date from course duration (§9). |
+| 3 | Do non-teaching Staff get attendance/presence tracking? | **No — SmartAccess only.** No classroom-style presence record for Staff (§7.4). |
+| 4 | Is anti-spoofing/liveness detection in scope for v1? | **Yes, in scope for v1** — required precisely because verified members now bypass a human guard (§6.1, §10, §13). |
+| 5 | Should the data model be multi-tenant from day one? | **No — single institution for v1.** No tenant/campus layer built in advance (§2). |
 
 ---
 
@@ -404,6 +430,6 @@ data needs are implemented, plus Row-Level Security policies per role.
 
 | Phase | Scope |
 |---|---|
-| **Phase 1** | Harden recognition engine + SmartAccess (this PRD's §6), migrate to Supabase, ship Enrollment Dashboard + Guard Dashboard + Original/Security Admin dashboards. |
+| **Phase 1** | Harden recognition engine + SmartAccess (this PRD's §6), including **liveness/anti-spoofing detection** ahead of enabling auto-admit for verified members; migrate to Supabase; ship Enrollment Dashboard + Guard Dashboard + Original/Security Admin dashboards. Auto-admit does not go live until liveness detection is validated. |
 | **Phase 2** | SmartAttendance classroom camera pipeline, Flutter student/lecturer app, Timetabling Admin dashboard. |
 | **Phase 3** | Dean of School dashboard, Temporary Admin flow, full analytics (false-positive tracking, movement rates), data-retention automation end-to-end. |
