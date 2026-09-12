@@ -1,6 +1,6 @@
 import cv2
 
-from src.services.recognition_service import app, recognize_embedding
+from src.services.recognition_service import app, recognize_face
 from src.services.access_service import process_access
 
 
@@ -66,7 +66,7 @@ class RecognitionPipeline:
             )
 
             # Recognition
-            recognition_result = recognize_embedding(face.embedding)
+            recognition_result = recognize_face(frame, face)
 
             status = recognition_result.get("status", "UNKNOWN")
 

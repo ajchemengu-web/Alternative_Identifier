@@ -65,6 +65,60 @@ def process_access(recognition_result, image=None):
             "recognition_score"
         )
 
+        liveness_score = recognition_result.get(
+            "liveness_score"
+        )
+
+
+        # Auto-admit only applies to a live face (docs/PRD.md §6.1,
+        # §13). A matched identity that fails the liveness check is
+        # routed to the guard instead of being auto-admitted.
+
+        if not recognition_result.get("is_live", True):
+
+            if should_log(student_id):
+
+                log_access(
+                    person_type="STUDENT",
+                    person_identifier=student_id,
+                    entrance="Nyayo Main Gate",
+                    recognition_score=score,
+                    decision="LIVENESS_FAILED",
+                    liveness_score=liveness_score
+                )
+
+            return {
+
+                "access_status": "REVIEW_REQUIRED",
+
+                "person_type": "SUSPECTED_SPOOF",
+
+                "message": (
+                    "Face matched a verified student, but failed "
+                    "the liveness check. Routed to guard review "
+                    "instead of auto-admit."
+                ),
+
+                "claimed_identity": {
+                    "full_name": recognition_result[
+                        "full_name"
+                    ],
+
+                    "admission_number": recognition_result[
+                        "admission_number"
+                    ]
+                },
+
+                "recognition_score": score,
+
+                "liveness_score": liveness_score,
+
+                "liveness_reasons": recognition_result.get(
+                    "liveness_reasons",
+                    []
+                )
+            }
+
 
         if should_log(student_id):
 
@@ -73,7 +127,8 @@ def process_access(recognition_result, image=None):
                 person_identifier=student_id,
                 entrance="Nyayo Main Gate",
                 recognition_score=score,
-                decision="VERIFIED"
+                decision="VERIFIED",
+                liveness_score=liveness_score
             )
 
 
@@ -103,7 +158,9 @@ def process_access(recognition_result, image=None):
                 ]
             },
 
-            "recognition_score": score
+            "recognition_score": score,
+
+            "liveness_score": liveness_score
         }
 
 
@@ -119,6 +176,48 @@ def process_access(recognition_result, image=None):
             "recognition_score"
         )
 
+        liveness_score = recognition_result.get(
+            "liveness_score"
+        )
+
+
+        if not recognition_result.get("is_live", True):
+
+            if should_log(guest_id):
+
+                log_access(
+                    person_type="GUEST",
+                    person_identifier=guest_id,
+                    entrance="Nyayo Main Gate",
+                    recognition_score=score,
+                    decision="LIVENESS_FAILED",
+                    liveness_score=liveness_score
+                )
+
+            return {
+
+                "access_status": "REVIEW_REQUIRED",
+
+                "person_type": "SUSPECTED_SPOOF",
+
+                "message": (
+                    "Face matched a previously admitted guest, but "
+                    "failed the liveness check. Routed to guard "
+                    "review instead of auto-admit."
+                ),
+
+                "guest_id": guest_id,
+
+                "recognition_score": score,
+
+                "liveness_score": liveness_score,
+
+                "liveness_reasons": recognition_result.get(
+                    "liveness_reasons",
+                    []
+                )
+            }
+
 
         if should_log(guest_id):
 
@@ -127,7 +226,8 @@ def process_access(recognition_result, image=None):
                 person_identifier=guest_id,
                 entrance="Nyayo Main Gate",
                 recognition_score=score,
-                decision="AG_VALID"
+                decision="AG_VALID",
+                liveness_score=liveness_score
             )
 
 
@@ -145,7 +245,9 @@ def process_access(recognition_result, image=None):
                 "expires_at"
             ],
 
-            "recognition_score": score
+            "recognition_score": score,
+
+            "liveness_score": liveness_score
         }
 
 

@@ -15,7 +15,8 @@ def log_access(
     entrance="Nyayo Main Gate",
     recognition_score=None,
     decision="VERIFIED",
-    guard_id=None
+    guard_id=None,
+    liveness_score=None
 ):
 
     connection = sqlite3.connect(DATABASE_PATH)
@@ -29,16 +30,18 @@ def log_access(
             entrance,
             recognition_score,
             decision,
-            guard_id
+            guard_id,
+            liveness_score
         )
-        VALUES (?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
     """, (
         person_type,
         person_identifier,
         entrance,
         recognition_score,
         decision,
-        guard_id
+        guard_id,
+        liveness_score
     ))
 
     connection.commit()

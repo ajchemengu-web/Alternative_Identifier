@@ -99,6 +99,8 @@ def initialize_database():
 
         guard_id TEXT,
 
+        liveness_score REAL,
+
         timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
 
     )

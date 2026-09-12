@@ -6,6 +6,8 @@ import cv2
 import numpy as np
 from insightface.app import FaceAnalysis
 
+from src.services.liveness_service import check_liveness
+
 
 # ============================================================
 # PATHS
@@ -508,6 +510,36 @@ def recognize_embedding(face_embedding):
 
 
 # ============================================================
+# RECOGNIZE ONE DETECTED FACE (IDENTITY + LIVENESS)
+# ============================================================
+#
+# Single entry point for turning a detected face into a full
+# recognition result. Every caller that matches a face against an
+# identity — the single-image /recognize endpoint, the multi-camera
+# pipeline, and the tracked live-camera service — should call this
+# instead of recognize_embedding() directly, so the liveness check
+# in §6.1/§13 of docs/PRD.md is enforced everywhere a face is
+# matched, not just at one call site.
+
+def recognize_face(frame, face):
+
+    liveness = check_liveness(frame, face)
+
+    result = recognize_embedding(
+        face.embedding
+    )
+
+    result["is_live"] = liveness["is_live"]
+    result["liveness_score"] = liveness["liveness_score"]
+
+    if liveness["reasons"]:
+
+        result["liveness_reasons"] = liveness["reasons"]
+
+    return result
+
+
+# ============================================================
 # RECOGNIZE IMAGE
 # ============================================================
 
@@ -531,6 +563,7 @@ def recognize_image(image):
 
     face = faces[0]
 
-    return recognize_embedding(
-        face.embedding
+    return recognize_face(
+        image,
+        face
     )

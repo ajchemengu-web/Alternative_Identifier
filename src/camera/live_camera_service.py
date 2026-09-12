@@ -4,7 +4,7 @@ import math
 
 from src.services.recognition_service import (
     app,
-    recognize_embedding
+    recognize_face
 )
 
 from src.services.access_service import (
@@ -308,8 +308,9 @@ while True:
             # RECOGNITION
             # ------------------------------
 
-            recognition_result = recognize_embedding(
-                face.embedding
+            recognition_result = recognize_face(
+                frame,
+                face
             )
 
             # ------------------------------
