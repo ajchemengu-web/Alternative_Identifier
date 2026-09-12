@@ -1,6 +1,6 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from pydantic import BaseModel
-from typing import Optional
+from typing import List, Optional
 import numpy as np
 import cv2
 import sqlite3
@@ -14,6 +14,7 @@ from src.services.guard_service import (
     reject_unknown_person
 )
 from src.services import auth_service
+from src.services.enrollment_service import enroll_student_face
 
 
 app = FastAPI(
@@ -344,6 +345,73 @@ def complete_temporary_admin_task(username: str):
         raise HTTPException(
             status_code=404,
             detail=result["message"]
+        )
+
+    return result
+
+
+# ==========================================
+# STUDENT FACIAL ENROLLMENT (docs/PRD.md §5)
+# ==========================================
+#
+# Live counterpart to src/enroll_students.py (an interactive webcam
+# CLI script, not reachable from this API). Takes one or more
+# reference photos instead of a live multi-sample capture loop.
+# STUDENT role only for now — see the scope note in
+# src/services/enrollment_service.py.
+
+@app.post("/enroll/student-face")
+async def enroll_student_face_endpoint(
+    student_id: str,
+    full_name: str,
+    admission_number: str,
+    hostel: str,
+    room: str,
+    files: List[UploadFile] = File(...)
+):
+
+    images = []
+
+    for file in files:
+
+        if not file.content_type.startswith("image/"):
+
+            raise HTTPException(
+                status_code=400,
+                detail=f"{file.filename} is not an image file."
+            )
+
+        image_bytes = await file.read()
+
+        image_array = np.frombuffer(image_bytes, np.uint8)
+
+        image = cv2.imdecode(image_array, cv2.IMREAD_COLOR)
+
+        if image is None:
+
+            raise HTTPException(
+                status_code=400,
+                detail=f"Could not decode {file.filename}."
+            )
+
+        images.append(image)
+
+    try:
+
+        result = enroll_student_face(
+            student_id=student_id,
+            full_name=full_name,
+            admission_number=admission_number,
+            hostel=hostel,
+            room=room,
+            images=images
+        )
+
+    except ValueError as error:
+
+        raise HTTPException(
+            status_code=400,
+            detail=str(error)
         )
 
     return result
