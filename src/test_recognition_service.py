@@ -151,8 +151,9 @@ if __name__ == "__main__":
     print(f"Picks the higher-scoring of two plausible matches -> {match['label']} ({score:.3f})")
 
     # ------------------------------------------------------------
-    # recognize_embedding — students take priority over guests;
-    # falls through to UNKNOWN when nothing matches
+    # recognize_embedding — watchlist targets take priority over
+    # students, which take priority over guests; falls through to
+    # UNKNOWN when nothing matches
     # ------------------------------------------------------------
 
     # Directly inject cache contents rather than hitting a real DB —
@@ -162,6 +163,7 @@ if __name__ == "__main__":
 
     student_embedding = np.array([1.0, 0.0, 0.0], dtype=np.float32)
     guest_embedding = np.array([0.0, 1.0, 0.0], dtype=np.float32)
+    target_embedding = np.array([0.0, 0.0, -1.0], dtype=np.float32)
 
     rs.identity_cache.students = [{
         "student_id": "STU-1",
@@ -176,6 +178,12 @@ if __name__ == "__main__":
         "expires_at": __import__("datetime").datetime.now() + __import__("datetime").timedelta(hours=1),
         "embedding": guest_embedding,
     }]
+    rs.identity_cache.targets = [{
+        "target_id": "TGT-1",
+        "full_name": "Person Of Interest",
+        "reason": "Reported theft",
+        "embedding": target_embedding,
+    }]
     rs.identity_cache.last_refresh = time.time()
 
     student_result = rs.recognize_embedding(student_embedding)
@@ -188,10 +196,20 @@ if __name__ == "__main__":
     assert guest_result["guest_id"] == "AG-1"
     print("Matches the guest cache entry (no student match) ->", guest_result)
 
+    target_result = rs.recognize_embedding(target_embedding)
+    assert target_result["status"] == "TARGET_MATCH"
+    assert target_result["target_id"] == "TGT-1"
+    assert target_result["full_name"] == "Person Of Interest"
+    assert target_result["reason"] == "Reported theft"
+    print("Matches the watchlist target cache entry ->", target_result)
+
+    # [0,0,1] is orthogonal to student/guest and anti-parallel to
+    # the target embedding [0,0,-1] (score -1, well under threshold)
+    # — genuinely matches nothing in any of the three caches.
     unknown_embedding = np.array([0.0, 0.0, 1.0], dtype=np.float32)
     unknown_result = rs.recognize_embedding(unknown_embedding)
     assert unknown_result["status"] == "UNKNOWN"
-    print("No match in either cache -> UNKNOWN ->", unknown_result)
+    print("No match in any cache -> UNKNOWN ->", unknown_result)
 
     # A face that would match a guest AND look somewhat like the
     # student vector: students are checked first, so a genuine
@@ -200,6 +218,31 @@ if __name__ == "__main__":
     dual_match_result = rs.recognize_embedding(student_embedding)
     assert dual_match_result["status"] == "STUDENT"
     print("Student match takes priority over any guest match")
+
+    # A watchlisted target wins even over a face that's also a
+    # verified student — a target flag is a security override
+    # (docs/PRD.md §8's "target tracking"), so add a target entry
+    # sharing the student's exact embedding and confirm it wins.
+    rs.identity_cache.targets = rs.identity_cache.targets + [{
+        "target_id": "TGT-2",
+        "full_name": "Flagged Student",
+        "reason": "Under investigation",
+        "embedding": student_embedding,
+    }]
+    rs.identity_cache.last_refresh = time.time()
+    override_result = rs.recognize_embedding(student_embedding)
+    assert override_result["status"] == "TARGET_MATCH"
+    assert override_result["target_id"] == "TGT-2"
+    print("A target flag overrides an otherwise-legitimate student match ->", override_result)
+
+    # Reset targets to just the original entry for the remaining tests.
+    rs.identity_cache.targets = [{
+        "target_id": "TGT-1",
+        "full_name": "Person Of Interest",
+        "reason": "Reported theft",
+        "embedding": target_embedding,
+    }]
+    rs.identity_cache.last_refresh = time.time()
 
     # ------------------------------------------------------------
     # recognize_face — combines identity match with liveness

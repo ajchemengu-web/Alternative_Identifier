@@ -54,6 +54,97 @@ def process_access(recognition_result, image=None):
 
 
     # ======================================
+    # WATCHLIST TARGET MATCH (docs/PRD.md §8's
+    # SmartAccess "target tracking" —
+    # watchlist_service.py)
+    # ======================================
+
+    if status == "TARGET_MATCH":
+
+        target_id = recognition_result["target_id"]
+
+        score = recognition_result.get(
+            "recognition_score"
+        )
+
+        liveness_score = recognition_result.get(
+            "liveness_score"
+        )
+
+
+        if not recognition_result.get("is_live", True):
+
+            log_access(
+                person_type="TARGET",
+                person_identifier=target_id,
+                entrance="Nyayo Main Gate",
+                recognition_score=score,
+                decision="LIVENESS_FAILED",
+                liveness_score=liveness_score
+            )
+
+            return {
+
+                "access_status": "REVIEW_REQUIRED",
+
+                "person_type": "SUSPECTED_SPOOF",
+
+                "message": (
+                    "Face matched an active watchlist target, but "
+                    "failed the liveness check. Logged for review."
+                ),
+
+                "target_id": target_id,
+
+                "recognition_score": score,
+
+                "liveness_score": liveness_score,
+
+                "liveness_reasons": recognition_result.get(
+                    "liveness_reasons",
+                    []
+                )
+            }
+
+
+        # No should_log() cooldown here, unlike STUDENT/GUEST below —
+        # every live sighting of an active target is logged, since
+        # that per-entrance, per-timestamp history is what "tracking"
+        # a target means (watchlist_service.get_sightings()).
+
+        log_access(
+            person_type="TARGET",
+            person_identifier=target_id,
+            entrance="Nyayo Main Gate",
+            recognition_score=score,
+            decision="TARGET_ALERT",
+            liveness_score=liveness_score
+        )
+
+        return {
+
+            "access_status": "DENIED",
+
+            "person_type": "TARGET_ALERT",
+
+            "message": (
+                "Face matched an active watchlist target. Access "
+                "denied; logged for immediate security review."
+            ),
+
+            "target_id": target_id,
+
+            "full_name": recognition_result.get("full_name"),
+
+            "reason": recognition_result.get("reason"),
+
+            "recognition_score": score,
+
+            "liveness_score": liveness_score
+        }
+
+
+    # ======================================
     # VERIFIED STUDENT
     # ======================================
 

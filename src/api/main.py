@@ -26,6 +26,8 @@ from src.services import me_service
 from src.services import lecturer_service
 from src.services import analytics_service
 from src.services import retention_service
+from src.services import watchlist_service
+from src.services import investigation_service
 from src.api.deps import require_admin_tier, require_roles
 
 
@@ -1170,3 +1172,276 @@ def run_retention_sweep(
         "purged_guest_ids": purged_guest_ids,
         "count": len(purged_guest_ids)
     }
+
+
+# ==========================================
+# WATCHLIST / TARGET TRACKING (docs/PRD.md §8)
+# ==========================================
+#
+# SmartAccess-specific: a dedicated dashboard for the Security Admin
+# (or Original Admin, as overall owner) to register and track
+# persons of interest. A target with reference photos is checked by
+# the live recognition pipeline ahead of students/guests — see
+# watchlist_service.py and access_service.py's TARGET_MATCH branch.
+
+@app.post("/watchlist")
+async def create_watchlist_target(
+    full_name: str,
+    description: Optional[str] = None,
+    reason: Optional[str] = None,
+    images: List[UploadFile] = File(default=[]),
+    current_user: dict = Depends(
+        require_admin_tier("SECURITY", "ORIGINAL")
+    )
+):
+
+    decoded_images = []
+
+    for file in images:
+
+        if not file.content_type.startswith("image/"):
+
+            raise HTTPException(
+                status_code=400,
+                detail=f"{file.filename} is not an image file."
+            )
+
+        image_bytes = await file.read()
+
+        image_array = np.frombuffer(image_bytes, np.uint8)
+
+        image = cv2.imdecode(image_array, cv2.IMREAD_COLOR)
+
+        if image is None:
+
+            raise HTTPException(
+                status_code=400,
+                detail=f"Could not decode {file.filename}."
+            )
+
+        decoded_images.append(image)
+
+    try:
+
+        return watchlist_service.create_target(
+            full_name=full_name,
+            description=description,
+            reason=reason,
+            images=decoded_images,
+            created_by=current_user["username"]
+        )
+
+    except ValueError as error:
+
+        raise HTTPException(
+            status_code=400,
+            detail=str(error)
+        )
+
+
+@app.get("/watchlist")
+def get_watchlist(
+    status: Optional[str] = None,
+    current_user: dict = Depends(
+        require_admin_tier("SECURITY", "ORIGINAL")
+    )
+):
+
+    return watchlist_service.list_targets(status)
+
+
+@app.get("/watchlist/{target_id}/sightings")
+def get_watchlist_sightings(
+    target_id: str,
+    current_user: dict = Depends(
+        require_admin_tier("SECURITY", "ORIGINAL")
+    )
+):
+
+    target = watchlist_service.get_target(target_id)
+
+    if target is None:
+
+        raise HTTPException(
+            status_code=404,
+            detail="Target not found"
+        )
+
+    return watchlist_service.get_sightings(target_id)
+
+
+@app.patch("/watchlist/{target_id}/resolve")
+def resolve_watchlist_target(
+    target_id: str,
+    current_user: dict = Depends(
+        require_admin_tier("SECURITY", "ORIGINAL")
+    )
+):
+
+    resolved = watchlist_service.resolve_target(
+        target_id,
+        current_user["username"]
+    )
+
+    if not resolved:
+
+        raise HTTPException(
+            status_code=404,
+            detail="Target not found"
+        )
+
+    return {"success": True}
+
+
+@app.patch("/watchlist/{target_id}/reactivate")
+def reactivate_watchlist_target(
+    target_id: str,
+    current_user: dict = Depends(
+        require_admin_tier("SECURITY", "ORIGINAL")
+    )
+):
+
+    reactivated = watchlist_service.reactivate_target(target_id)
+
+    if not reactivated:
+
+        raise HTTPException(
+            status_code=404,
+            detail="Target not found"
+        )
+
+    return {"success": True}
+
+
+# ==========================================
+# INVESTIGATIONS (docs/PRD.md §8)
+# ==========================================
+#
+# SmartAccess case management, same dashboard/role scope as the
+# watchlist above — see investigation_service.py.
+
+class InvestigationRequest(BaseModel):
+
+    title: str
+    description: Optional[str] = None
+    target_id: Optional[str] = None
+
+
+class InvestigationNoteRequest(BaseModel):
+
+    note: str
+
+
+@app.post("/investigations")
+def create_investigation(
+    request: InvestigationRequest,
+    current_user: dict = Depends(
+        require_admin_tier("SECURITY", "ORIGINAL")
+    )
+):
+
+    return investigation_service.create_case(
+        title=request.title,
+        description=request.description,
+        target_id=request.target_id,
+        opened_by=current_user["username"]
+    )
+
+
+@app.get("/investigations")
+def get_investigations(
+    status: Optional[str] = None,
+    current_user: dict = Depends(
+        require_admin_tier("SECURITY", "ORIGINAL")
+    )
+):
+
+    return investigation_service.list_cases(status)
+
+
+@app.get("/investigations/{case_id}")
+def get_investigation(
+    case_id: str,
+    current_user: dict = Depends(
+        require_admin_tier("SECURITY", "ORIGINAL")
+    )
+):
+
+    case = investigation_service.get_case(case_id)
+
+    if case is None:
+
+        raise HTTPException(
+            status_code=404,
+            detail="Case not found"
+        )
+
+    return case
+
+
+@app.post("/investigations/{case_id}/notes")
+def add_investigation_note(
+    case_id: str,
+    request: InvestigationNoteRequest,
+    current_user: dict = Depends(
+        require_admin_tier("SECURITY", "ORIGINAL")
+    )
+):
+
+    try:
+
+        return investigation_service.add_note(
+            case_id,
+            request.note,
+            author=current_user["username"]
+        )
+
+    except ValueError as error:
+
+        raise HTTPException(
+            status_code=404,
+            detail=str(error)
+        )
+
+
+@app.patch("/investigations/{case_id}/close")
+def close_investigation(
+    case_id: str,
+    current_user: dict = Depends(
+        require_admin_tier("SECURITY", "ORIGINAL")
+    )
+):
+
+    closed = investigation_service.close_case(
+        case_id,
+        current_user["username"]
+    )
+
+    if not closed:
+
+        raise HTTPException(
+            status_code=404,
+            detail="Case not found"
+        )
+
+    return {"success": True}
+
+
+@app.patch("/investigations/{case_id}/reopen")
+def reopen_investigation(
+    case_id: str,
+    current_user: dict = Depends(
+        require_admin_tier("SECURITY", "ORIGINAL")
+    )
+):
+
+    reopened = investigation_service.reopen_case(case_id)
+
+    if not reopened:
+
+        raise HTTPException(
+            status_code=404,
+            detail="Case not found"
+        )
+
+    return {"success": True}

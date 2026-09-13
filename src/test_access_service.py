@@ -254,6 +254,62 @@ if __name__ == "__main__":
     print("Admitted guest failing liveness -> routed to review ->", guest_spoof_result)
 
     # ------------------------------------------------------------
+    # TARGET_MATCH — live -> DENIED, logged TARGET_ALERT, no cooldown
+    # ------------------------------------------------------------
+
+    target_result = access_service.process_access({
+        "status": "TARGET_MATCH",
+        "target_id": "TGT-1",
+        "full_name": "Person Of Interest",
+        "reason": "Reported theft",
+        "recognition_score": 0.81,
+        "liveness_score": 0.77,
+        "is_live": True
+    })
+
+    assert target_result["access_status"] == "DENIED"
+    assert target_result["person_type"] == "TARGET_ALERT"
+    assert target_result["target_id"] == "TGT-1"
+    assert _access_log_count(temp_db_path, "TARGET_ALERT") == 1
+    print("Live target match -> DENIED, logged TARGET_ALERT ->", target_result)
+
+    # Unlike STUDENT/GUEST, a repeat target sighting is logged again
+    # immediately — no should_log() cooldown suppression, since every
+    # sighting is the point of target tracking.
+    access_service.process_access({
+        "status": "TARGET_MATCH",
+        "target_id": "TGT-1",
+        "full_name": "Person Of Interest",
+        "reason": "Reported theft",
+        "recognition_score": 0.81,
+        "liveness_score": 0.77,
+        "is_live": True
+    })
+    assert _access_log_count(temp_db_path, "TARGET_ALERT") == 2
+    print("Repeat target sighting is logged again immediately, unlike STUDENT/GUEST")
+
+    # ------------------------------------------------------------
+    # TARGET_MATCH — liveness failed -> REVIEW_REQUIRED
+    # ------------------------------------------------------------
+
+    target_spoof_result = access_service.process_access({
+        "status": "TARGET_MATCH",
+        "target_id": "TGT-2",
+        "full_name": "Another Person",
+        "reason": "Trespassing",
+        "recognition_score": 0.79,
+        "liveness_score": 0.12,
+        "is_live": False
+    })
+
+    assert target_spoof_result["access_status"] == "REVIEW_REQUIRED"
+    assert target_spoof_result["person_type"] == "SUSPECTED_SPOOF"
+    # Two liveness failures already happened above (STUDENT, GUEST);
+    # this is the third.
+    assert _access_log_count(temp_db_path, "LIVENESS_FAILED") == 3
+    print("Target match failing liveness -> routed to review ->", target_spoof_result)
+
+    # ------------------------------------------------------------
     # UNKNOWN — no image provided
     # ------------------------------------------------------------
 

@@ -227,6 +227,24 @@ Dashboard surfaces:
 - Camera status (online/offline/degraded per checkpoint)
 - Direct access to camera feeds
 
+### 6.3a Target tracking & investigations (Security Admin)
+
+A dashboard surface dedicated to SmartAccess itself, separate from the
+routine access-log/analytics view in §6.3:
+- **Watchlist ("target tracking")** — the Security or Original Admin
+  registers a person of interest (name, description, reason, optional
+  reference photos). A target with a stored photo is checked by the live
+  recognition pipeline **ahead of students/guests** — a target match is a
+  security override, so it wins even over an otherwise-legitimate member,
+  and access is denied rather than auto-admitted. Unlike STUDENT/GUEST
+  matches, every live sighting is logged (no cooldown throttling), giving
+  a per-entrance, per-timestamp sighting history for that target — that
+  history is what "tracking" means here.
+- **Investigations** — a lightweight case file (title, description,
+  status OPEN/CLOSED, optionally linked to one watchlist target) with an
+  append-only note timeline, for building a record around a target or an
+  incident over time.
+
 ### 6.4 Current prototype status (`Alternative_Identifier`)
 
 Already implemented, to be hardened and extended rather than rebuilt:
@@ -348,7 +366,7 @@ in their profile determines what they see.
 | Tier | Scope |
 |---|---|
 | **Original Admin** | System owner. Monitoring dashboard across *all* sections (Access/Attendance). Admits/creates other admins (including Temporary Admins). Camera management control access. |
-| **Security Admin** | Oversight of SmartAccess. Checks camera status. Camera access/configuration within SmartAccess. Controls enrollment. |
+| **Security Admin** | Oversight of SmartAccess. Checks camera status. Camera access/configuration within SmartAccess. Controls enrollment. A dedicated SmartAccess dashboard for target tracking (watchlist) and investigations (§6.3a). |
 | **Directorate of Timetabling Admin** | Create/update/cancel timetables. Upload per course & year; auto-pushes to student schedules. |
 | **Dean of School Admin** | Per-school scope: class logs, venue camera access, total student roster by classification, total lectures/units for the department, access to all department timetables. |
 | **Temporary Admin** | Enrollment Dashboard only (data entry + facial enrollment); credentials expire on task completion. |

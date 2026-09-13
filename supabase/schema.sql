@@ -6,7 +6,7 @@
 -- src/upgrade_timetable_table.py, src/upgrade_dean_fields.py,
 -- src/upgrade_cameras_table.py, src/upgrade_lecturers_table.py,
 -- src/upgrade_false_positive_tracking.py, src/upgrade_semester_field.py,
--- src/upgrade_units_table.py),
+-- src/upgrade_units_table.py, src/upgrade_watchlist_investigations.py),
 -- translated to Postgres syntax, for docs/PRD.md §10's move off
 -- SQLite for production.
 --
@@ -146,6 +146,58 @@ create table if not exists lecturers (
     created_at timestamptz not null default now()
 );
 
+-- SmartAccess "target tracking" (Security Admin dashboard). A
+-- target with an embedding_file is checked by the live recognition
+-- pipeline ahead of students/guests; every live sighting gets its
+-- own access_logs row (person_type='TARGET') rather than being
+-- cooldown-throttled like STUDENT/GUEST — see
+-- src/services/watchlist_service.py and access_service.py.
+create table if not exists watchlist_targets (
+    id bigint generated always as identity primary key,
+    target_id text unique not null,
+    full_name text not null,
+    description text,
+    reason text,
+    status text not null default 'ACTIVE',
+    embedding_file text,
+    created_by text,
+    created_at timestamptz not null default now(),
+    resolved_by text,
+    resolved_at timestamptz
+);
+
+create index if not exists watchlist_targets_status_idx
+    on watchlist_targets (status);
+
+-- SmartAccess case management, same dashboard/role scope as the
+-- watchlist above — see src/services/investigation_service.py.
+create table if not exists investigations (
+    id bigint generated always as identity primary key,
+    case_id text unique not null,
+    title text not null,
+    description text,
+    target_id text,
+    status text not null default 'OPEN',
+    opened_by text,
+    opened_at timestamptz not null default now(),
+    closed_by text,
+    closed_at timestamptz
+);
+
+create index if not exists investigations_status_idx
+    on investigations (status);
+
+create table if not exists investigation_notes (
+    id bigint generated always as identity primary key,
+    case_id text not null,
+    author text,
+    note text not null,
+    created_at timestamptz not null default now()
+);
+
+create index if not exists investigation_notes_case_idx
+    on investigation_notes (case_id);
+
 create table if not exists access_logs (
     id bigint generated always as identity primary key,
     person_type text not null,
@@ -187,3 +239,6 @@ alter table users enable row level security;
 alter table timetable_entries enable row level security;
 alter table cameras enable row level security;
 alter table lecturers enable row level security;
+alter table watchlist_targets enable row level security;
+alter table investigations enable row level security;
+alter table investigation_notes enable row level security;

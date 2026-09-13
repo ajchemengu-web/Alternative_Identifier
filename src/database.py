@@ -301,6 +301,99 @@ def initialize_database():
     """)
 
 
+    # =========================================
+    # WATCHLIST TARGETS TABLE (SmartAccess
+    # "target tracking" — Security Admin dashboard,
+    # docs/PRD.md §8). A target with an embedding_file
+    # is checked by the live recognition pipeline
+    # (recognition_service.IdentityCache, ahead of
+    # students/guests) — every live sighting is
+    # logged to access_logs (person_type='TARGET'),
+    # which is what "tracking" actually means here:
+    # a timestamped, per-entrance sighting history.
+    # =========================================
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS watchlist_targets (
+
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+        target_id TEXT UNIQUE NOT NULL,
+
+        full_name TEXT NOT NULL,
+
+        description TEXT,
+
+        reason TEXT,
+
+        status TEXT NOT NULL DEFAULT 'ACTIVE',
+
+        embedding_file TEXT,
+
+        created_by TEXT,
+
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+        resolved_by TEXT,
+
+        resolved_at DATETIME
+
+    )
+    """)
+
+
+    # =========================================
+    # INVESTIGATIONS TABLES (SmartAccess case
+    # management — Security Admin dashboard,
+    # docs/PRD.md §8). A case is a lightweight
+    # free-text file, optionally tied to one
+    # watchlist target; investigation_notes is
+    # its append-only timeline.
+    # =========================================
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS investigations (
+
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+        case_id TEXT UNIQUE NOT NULL,
+
+        title TEXT NOT NULL,
+
+        description TEXT,
+
+        target_id TEXT,
+
+        status TEXT NOT NULL DEFAULT 'OPEN',
+
+        opened_by TEXT,
+
+        opened_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+        closed_by TEXT,
+
+        closed_at DATETIME
+
+    )
+    """)
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS investigation_notes (
+
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+        case_id TEXT NOT NULL,
+
+        author TEXT,
+
+        note TEXT NOT NULL,
+
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+
+    )
+    """)
+
+
     connection.commit()
 
     connection.close()
