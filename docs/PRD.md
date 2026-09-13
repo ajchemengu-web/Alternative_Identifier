@@ -428,8 +428,19 @@ recorded here for traceability.
 
 ## 13. Phased Rollout
 
-| Phase | Scope |
-|---|---|
-| **Phase 1** | Harden recognition engine + SmartAccess (this PRD's §6), including **liveness/anti-spoofing detection** ahead of enabling auto-admit for verified members; migrate to Supabase; ship Enrollment Dashboard + Guard Dashboard + Original/Security Admin dashboards. Auto-admit does not go live until liveness detection is validated. |
-| **Phase 2** | SmartAttendance classroom camera pipeline, Flutter student/lecturer app, Timetabling Admin dashboard. |
-| **Phase 3** | Dean of School dashboard, Temporary Admin flow, full analytics (false-positive tracking, movement rates), data-retention automation end-to-end. |
+Status reflects the `claude/facial-recognition-system-design-c9q9v1`
+branch across all three repos (`Alternative_Identifier`,
+`smart-gen.com`, `smart-attendance-app`) as of this update. ✅ done
+and verified with tests; ⏸ built but not yet connected to real
+external infrastructure (credentials/hardware); ❌ not started.
+
+| Phase | Scope | Status |
+|---|---|---|
+| **Phase 1** | Harden recognition engine + SmartAccess (this PRD's §6), including **liveness/anti-spoofing detection** ahead of enabling auto-admit for verified members; migrate to Supabase; ship Enrollment Dashboard + Guard Dashboard + Original/Security Admin dashboards. Auto-admit does not go live until liveness detection is validated. | Liveness detection ✅ · Enrollment/Guard/Original/Security dashboards ✅ · Supabase migration ⏸ (`supabase/schema.sql` is current with every table below; not yet applied to a live project or connected via `DATABASE_URL` — on hold pending credentials) |
+| **Phase 2** | SmartAttendance classroom camera pipeline, Flutter student/lecturer app, Timetabling Admin dashboard. | Timetabling Admin dashboard ✅ · Flutter app (student "My Schedule" + lecturer "My Units", secure-storage session) ✅ (not yet run on a real device/emulator — this environment has no Android SDK/Chrome/Linux GTK toolchain) · classroom-camera attendance-capture pipeline ❌ (needs real classroom camera hardware/RTSP feeds to build against) |
+| **Phase 3** | Dean of School dashboard, Temporary Admin flow, full analytics (false-positive tracking, movement rates), data-retention automation end-to-end. | Dean of School dashboard ✅ · Temporary Admin flow (real Enrollment Dashboard, task-completion deactivation) ✅ · analytics (false-positive flagging + rate, movement by entrance/person type) ✅ · data-retention automation ✅ (rejected guest data deleted immediately; admitted guest data auto-purged ~24h after admission via an hourly sweep + on-demand endpoint) — student-graduation deletion stays the deliberately manual admin action from §9.4's decision, not a gap |
+
+Camera **management** (the registry: provisioning, status, config —
+Original/Security/Dean access per §8) is done and is not the same
+thing as the classroom-camera **pipeline** above, which needs actual
+recognition running against a live classroom feed.
