@@ -1,7 +1,10 @@
+import os
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
+from functools import lru_cache
 
 import bcrypt
+import jwt
 
 from src.db import get_connection
 
@@ -12,17 +15,13 @@ from src.db import get_connection
 #
 # Backend for the Enrollment Dashboard (docs/PRD.md §5): one place
 # every role — Student, Lecturer, Guard, Staff, Admin (any tier) —
-# gets provisioned, and one place a login checks credentials and
-# says which dashboard they land on.
-#
-# What this deliberately does NOT include yet: session tokens / JWTs
-# / a real auth middleware protecting the other endpoints. Nothing
-# else in this API is authenticated today (/recognize, /guard/*, the
-# read endpoints are all open), so bolting a full session layer onto
-# just this one feature would be inconsistent with where the rest of
-# the prototype is. This gives the real credential check + password
-# hashing + role/dashboard routing; wiring that into request-level
-# auth is the natural next step once more of the API needs it.
+# gets provisioned, one place a login checks credentials and says
+# which dashboard they land on, and (create_access_token /
+# decode_access_token below) the request-level auth every other
+# protected endpoint in src/api/main.py now depends on via
+# src/api/deps.py — /recognize, /guard/*, /students, /guests,
+# /access-logs, /enroll, /enroll/student-face were unauthenticated
+# until this token layer existed.
 #
 # Also deliberately not included: actually emailing credentials.
 # send_enrollment_email() below is a stub — it logs what would be
@@ -66,6 +65,75 @@ def verify_password(password, password_hash):
         password.encode("utf-8"),
         password_hash.encode("utf-8")
     )
+
+
+# ============================================================
+# ACCESS TOKENS (request-level auth for every other endpoint)
+# ============================================================
+
+ACCESS_TOKEN_TTL = timedelta(hours=12)
+
+
+@lru_cache(maxsize=1)
+def _jwt_secret():
+
+    secret = os.environ.get("JWT_SECRET")
+
+    if not secret:
+
+        print(
+            "[auth_service] WARNING: JWT_SECRET is not set — using an "
+            "insecure development-only default. Set JWT_SECRET (see "
+            ".env.example) before deploying anywhere real."
+        )
+
+        secret = "dev-only-insecure-jwt-secret-change-me"
+
+    return secret
+
+
+def create_access_token(username, role, admin_tier):
+
+    payload = {
+
+        "sub": username,
+
+        "role": role,
+
+        "admin_tier": admin_tier,
+
+        "exp": datetime.now(timezone.utc) + ACCESS_TOKEN_TTL
+    }
+
+    return jwt.encode(
+        payload,
+        _jwt_secret(),
+        algorithm="HS256"
+    )
+
+
+def decode_access_token(token):
+
+    try:
+
+        payload = jwt.decode(
+            token,
+            _jwt_secret(),
+            algorithms=["HS256"]
+        )
+
+    except jwt.PyJWTError:
+
+        return None
+
+    return {
+
+        "username": payload.get("sub"),
+
+        "role": payload.get("role"),
+
+        "admin_tier": payload.get("admin_tier")
+    }
 
 
 # ============================================================
@@ -284,6 +352,12 @@ def authenticate(username, password):
         "admin_tier": user["admin_tier"],
 
         "dashboard": resolve_dashboard(
+            user["role"],
+            user["admin_tier"]
+        ),
+
+        "access_token": create_access_token(
+            user["username"],
             user["role"],
             user["admin_tier"]
         )

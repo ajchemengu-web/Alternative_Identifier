@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import Depends, FastAPI, UploadFile, File, HTTPException
 from pydantic import BaseModel
 from typing import List, Optional
 import numpy as np
@@ -15,6 +15,7 @@ from src.services.guard_service import (
 )
 from src.services import auth_service
 from src.services.enrollment_service import enroll_student_face
+from src.api.deps import require_admin_tier, require_roles
 
 
 app = FastAPI(
@@ -68,7 +69,7 @@ def health():
 # ==========================================
 
 @app.get("/students")
-def get_students():
+def get_students(current_user: dict = Depends(require_roles("ADMIN"))):
 
     connection = get_connection()
 
@@ -99,7 +100,7 @@ def get_students():
 # ==========================================
 
 @app.get("/guests")
-def get_guests():
+def get_guests(current_user: dict = Depends(require_roles("ADMIN"))):
 
     connection = get_connection()
 
@@ -131,7 +132,9 @@ def get_guests():
 # ==========================================
 
 @app.get("/access-logs")
-def get_access_logs():
+def get_access_logs(
+    current_user: dict = Depends(require_roles("ADMIN", "GUARD"))
+):
 
     connection = get_connection()
 
@@ -167,7 +170,10 @@ def get_access_logs():
 # ==========================================
 
 @app.post("/recognize")
-async def recognize(file: UploadFile = File(...)):
+async def recognize(
+    file: UploadFile = File(...),
+    current_user: dict = Depends(require_roles("ADMIN", "GUARD"))
+):
 
     # Check uploaded file type
     if not file.content_type.startswith("image/"):
@@ -219,7 +225,9 @@ async def recognize(file: UploadFile = File(...)):
 
 @app.get("/guard/pending")
 
-def get_pending_persons():
+def get_pending_persons(
+    current_user: dict = Depends(require_roles("ADMIN", "GUARD"))
+):
 
     pending = get_pending_unknowns()
 
@@ -234,7 +242,8 @@ def get_pending_persons():
 @app.post("/guard/admit/{unknown_id}")
 
 def admit_person(
-    unknown_id: str
+    unknown_id: str,
+    current_user: dict = Depends(require_roles("ADMIN", "GUARD"))
 ):
 
     result = admit_unknown_person(
@@ -246,7 +255,8 @@ def admit_person(
 @app.post("/guard/reject/{unknown_id}")
 
 def reject_person(
-    unknown_id: str
+    unknown_id: str,
+    current_user: dict = Depends(require_roles("ADMIN", "GUARD"))
 ):
 
     result = reject_unknown_person(
@@ -260,11 +270,9 @@ def reject_person(
 # ENROLLMENT DASHBOARD (docs/PRD.md §5)
 # ==========================================
 #
-# No session/auth middleware protects these yet — see the note at
-# the top of src/services/auth_service.py. In particular, nothing
-# stops an unauthenticated caller from hitting /enroll directly;
-# that needs to change before this is exposed beyond a trusted admin
-# tool, same as the rest of this prototype's open endpoints.
+# /login is intentionally the one open endpoint here — it's how a
+# caller gets an access_token in the first place. Everything else
+# below requires one, via src/api/deps.py.
 
 class EnrollRequest(BaseModel):
 
@@ -283,7 +291,10 @@ class LoginRequest(BaseModel):
 
 
 @app.post("/enroll")
-def enroll(request: EnrollRequest):
+def enroll(
+    request: EnrollRequest,
+    current_user: dict = Depends(require_roles("ADMIN"))
+):
 
     try:
 
@@ -335,7 +346,10 @@ def login(request: LoginRequest):
 
 
 @app.post("/admin/temporary-admins/{username}/complete")
-def complete_temporary_admin_task(username: str):
+def complete_temporary_admin_task(
+    username: str,
+    current_user: dict = Depends(require_admin_tier("ORIGINAL"))
+):
 
     result = auth_service.mark_temporary_admin_task_complete(
         username
@@ -368,7 +382,8 @@ async def enroll_student_face_endpoint(
     admission_number: str,
     hostel: str,
     room: str,
-    files: List[UploadFile] = File(...)
+    files: List[UploadFile] = File(...),
+    current_user: dict = Depends(require_roles("ADMIN"))
 ):
 
     images = []
