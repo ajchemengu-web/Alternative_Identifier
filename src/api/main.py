@@ -580,6 +580,13 @@ async def enroll_student_face_endpoint(
 
 class TimetableEntryRequest(BaseModel):
 
+    # Required, and in this order deliberately: department -> course
+    # -> year is the procedure the Timetabling Admin dashboard's own
+    # form now follows (docs/PRD.md §6, §8) — it's the same triple a
+    # student's own profile carries (see me_service.py), so it's
+    # what actually lets the system route an entry to the right
+    # students' schedules rather than just a course+year guess.
+    department: str
     course: str
     year: int
     day_of_week: str
@@ -588,7 +595,6 @@ class TimetableEntryRequest(BaseModel):
     unit_name: str
     facilitator: str
     venue: str
-    department: Optional[str] = None
 
 
 class TimetableStatusRequest(BaseModel):
