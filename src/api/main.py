@@ -18,6 +18,7 @@ from src.services.enrollment_service import enroll_student_face
 from src.services import timetable_service
 from src.services import dean_service
 from src.services import camera_service
+from src.services import me_service
 from src.api.deps import require_admin_tier, require_roles
 
 
@@ -781,3 +782,31 @@ def delete_camera(
         )
 
     return {"success": True}
+
+
+# ==========================================
+# SMARTATTENDANCE — "MY PROFILE" (docs/PRD.md
+# §6, Phase 2)
+# ==========================================
+#
+# Students/lecturers don't use the web dashboards (docs/PRD.md §4) —
+# this is for the separate SmartAttendance app to resolve its own
+# logged-in user to a course/year it can request a timetable for.
+
+@app.get("/me")
+def get_me(
+    current_user: dict = Depends(require_roles("STUDENT"))
+):
+
+    profile = me_service.get_my_student_profile(
+        current_user["username"]
+    )
+
+    if profile is None:
+
+        raise HTTPException(
+            status_code=404,
+            detail="No linked student profile found for this account"
+        )
+
+    return profile
