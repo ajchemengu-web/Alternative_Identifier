@@ -68,6 +68,7 @@ def _create_schema(path):
             department TEXT,
             course TEXT,
             year INTEGER,
+            semester INTEGER,
             embedding_file TEXT NOT NULL,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )
@@ -197,8 +198,9 @@ if __name__ == "__main__":
         print("Empty image list rejected as expected:", error)
 
     # ------------------------------------------------------------
-    # department/course/year (Dean of School scoping, docs/PRD.md §8)
-    # -> optional, stored when supplied
+    # department/course/year/semester (Dean of School scoping +
+    # SmartAttendance schedule matching, docs/PRD.md §8) -> optional,
+    # stored when supplied
     # ------------------------------------------------------------
 
     _queue_faces([_FakeFace([0.5, 0.5, 0.0])])
@@ -212,13 +214,15 @@ if __name__ == "__main__":
         images=[blank_image],
         department="School of Computing",
         course="BSc Computer Science",
-        year=2
+        year=2,
+        semester=1
     )
 
     assert classified_result["department"] == "School of Computing"
     assert classified_result["course"] == "BSc Computer Science"
     assert classified_result["year"] == 2
-    print("department/course/year stored when supplied ->", classified_result)
+    assert classified_result["semester"] == 1
+    print("department/course/year/semester stored when supplied ->", classified_result)
 
     import shutil
     shutil.rmtree(temp_dir)

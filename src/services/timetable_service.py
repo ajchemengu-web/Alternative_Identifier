@@ -52,7 +52,8 @@ def create_entry(
     facilitator,
     venue,
     created_by=None,
-    department=None
+    department=None,
+    semester=None
 ):
 
     day = day_of_week.upper()
@@ -72,6 +73,7 @@ def create_entry(
             course,
             year,
             department,
+            semester,
             day_of_week,
             start_time,
             end_time,
@@ -81,11 +83,12 @@ def create_entry(
             status,
             created_by
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'ON', ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ON', ?)
     """, (
         course,
         year,
         department,
+        semester,
         day,
         start_time,
         end_time,
@@ -107,6 +110,8 @@ def create_entry(
 
         "department": department,
 
+        "semester": semester,
+
         "day_of_week": day,
 
         "start_time": start_time,
@@ -125,7 +130,13 @@ def create_entry(
     }
 
 
-def list_entries(course=None, year=None, department=None, facilitator=None):
+def list_entries(
+    course=None,
+    year=None,
+    department=None,
+    facilitator=None,
+    semester=None
+):
 
     connection = get_connection()
 
@@ -155,6 +166,18 @@ def list_entries(course=None, year=None, department=None, facilitator=None):
 
         params.append(department)
 
+    if semester is not None:
+
+        # Same free-text-style plain match as the rest of this
+        # module — a course/year's schedule commonly differs between
+        # semester 1 and semester 2, so this is required alongside
+        # department/course/year to route an entry to the right
+        # students at the right time of year (see this module's
+        # docstring and TimetableEntryRequest in src/api/main.py).
+        query += " AND semester = ?"
+
+        params.append(semester)
+
     if facilitator:
 
         # Free-text match, same lightweight style as course/year/
@@ -167,7 +190,7 @@ def list_entries(course=None, year=None, department=None, facilitator=None):
 
         params.append(facilitator)
 
-    query += " ORDER BY course, year, day_of_week, start_time"
+    query += " ORDER BY course, year, semester, day_of_week, start_time"
 
     cursor.execute(query, params)
 

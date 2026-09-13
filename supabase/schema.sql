@@ -5,7 +5,7 @@
 -- src/upgrade_database.py, src/upgrade_liveness_logging.py,
 -- src/upgrade_timetable_table.py, src/upgrade_dean_fields.py,
 -- src/upgrade_cameras_table.py, src/upgrade_lecturers_table.py,
--- src/upgrade_false_positive_tracking.py),
+-- src/upgrade_false_positive_tracking.py, src/upgrade_semester_field.py),
 -- translated to Postgres syntax, for docs/PRD.md §10's move off
 -- SQLite for production.
 --
@@ -26,6 +26,7 @@ create table if not exists students (
     department text,
     course text,
     year integer,
+    semester integer,
     embedding_file text not null,
     created_at timestamptz not null default now()
 );
@@ -76,6 +77,7 @@ create table if not exists timetable_entries (
     course text not null,
     year integer not null,
     department text,
+    semester integer,
     day_of_week text not null,
     start_time text not null,
     end_time text not null,
@@ -88,7 +90,7 @@ create table if not exists timetable_entries (
 );
 
 create index if not exists timetable_entries_course_year_idx
-    on timetable_entries (course, year);
+    on timetable_entries (course, year, semester);
 
 create index if not exists timetable_entries_department_idx
     on timetable_entries (department);

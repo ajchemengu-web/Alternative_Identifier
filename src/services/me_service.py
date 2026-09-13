@@ -12,9 +12,10 @@ from src.db import get_connection
 # username/role/admin_tier from their JWT
 # (src/services/auth_service.py) — this resolves that to the actual
 # student/lecturer record via users.linked_person_id, so the app
-# knows what to request a timetable for (a student's course/year, a
-# lecturer's own name to match against timetable_entries.facilitator
-# — see timetable_service.py's list_entries facilitator filter).
+# knows what to request a timetable for (a student's
+# department/course/year/semester, a lecturer's own name to match
+# against timetable_entries.facilitator — see timetable_service.py's
+# list_entries filters).
 
 
 def get_my_student_profile(username):
@@ -50,7 +51,8 @@ def get_my_student_profile(username):
             admission_number,
             department,
             course,
-            year
+            year,
+            semester
         FROM students
         WHERE student_id = ?
     """, (

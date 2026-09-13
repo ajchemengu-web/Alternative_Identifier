@@ -27,10 +27,14 @@ from src.services.recognition_service import (
 # table(s) before they can be wired up the same way — flagged here
 # rather than forced into the student schema.
 #
-# department/course/year are optional, free-text (docs/PRD.md §8):
-# they scope a student into the Dean of School Admin's roster and
-# don't gate anything here — a student enrolled without them just
-# doesn't show up in a department-filtered Dean view yet.
+# department/course/year/semester are optional, free-text
+# (docs/PRD.md §8): department/course/year scope a student into the
+# Dean of School Admin's roster, and semester (with course/year) is
+# what SmartAttendance matches against a timetable_entries.semester
+# to route the right half-year's schedule to the student — none of
+# them gate anything here, a student enrolled without them just
+# doesn't show up in a department-filtered Dean view or get a
+# semester-scoped schedule match yet.
 
 
 os.makedirs(
@@ -75,7 +79,8 @@ def enroll_student_face(
     images,
     department=None,
     course=None,
-    year=None
+    year=None,
+    semester=None
 ):
 
     if not images:
@@ -142,9 +147,10 @@ def enroll_student_face(
                 department,
                 course,
                 year,
+                semester,
                 embedding_file
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             student_id,
             full_name,
@@ -154,6 +160,7 @@ def enroll_student_face(
             department,
             course,
             year,
+            semester,
             embedding_filename
         ))
 
@@ -194,6 +201,8 @@ def enroll_student_face(
         "course": course,
 
         "year": year,
+
+        "semester": semester,
 
         "samples_used": len(samples),
 

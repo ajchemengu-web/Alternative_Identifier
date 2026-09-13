@@ -13,6 +13,7 @@ def _create_schema(path):
             course TEXT NOT NULL,
             year INTEGER NOT NULL,
             department TEXT,
+            semester INTEGER,
             day_of_week TEXT NOT NULL,
             start_time TEXT NOT NULL,
             end_time TEXT NOT NULL,
@@ -57,12 +58,14 @@ if __name__ == "__main__":
         facilitator="Dr. Otieno",
         venue="Hall A",
         created_by="timetabling_admin",
-        department="School of Computing"
+        department="School of Computing",
+        semester=1
     )
 
     assert entry["day_of_week"] == "MONDAY"
     assert entry["status"] == "ON"
     assert entry["department"] == "School of Computing"
+    assert entry["semester"] == 1
     print("Created entry ->", entry)
 
     timetable_service.create_entry(
@@ -74,7 +77,8 @@ if __name__ == "__main__":
         unit_name="Databases",
         facilitator="Dr. Wanjiru",
         venue="Hall B",
-        created_by="timetabling_admin"
+        created_by="timetabling_admin",
+        semester=2
     )
 
     timetable_service.create_entry(
@@ -123,6 +127,20 @@ if __name__ == "__main__":
     )
     assert len(no_department_match) == 0
     print("Non-matching department filter returns no entries, as expected")
+
+    semester_1_entries = timetable_service.list_entries(semester=1)
+    assert len(semester_1_entries) == 1
+    assert semester_1_entries[0]["unit_name"] == "Data Structures"
+    print(f"Semester 1 entries: {len(semester_1_entries)}")
+
+    semester_2_entries = timetable_service.list_entries(semester=2)
+    assert len(semester_2_entries) == 1
+    assert semester_2_entries[0]["unit_name"] == "Databases"
+    print(f"Semester 2 entries: {len(semester_2_entries)}")
+
+    no_semester_match = timetable_service.list_entries(semester=99)
+    assert len(no_semester_match) == 0
+    print("Non-matching semester filter returns no entries, as expected")
 
     facilitator_entries = timetable_service.list_entries(
         facilitator="Dr. Kamau"

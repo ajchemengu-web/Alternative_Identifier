@@ -49,6 +49,8 @@ def initialize_database():
 
         year INTEGER,
 
+        semester INTEGER,
+
         embedding_file TEXT NOT NULL,
 
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -167,6 +169,8 @@ def initialize_database():
         year INTEGER NOT NULL,
 
         department TEXT,
+
+        semester INTEGER,
 
         day_of_week TEXT NOT NULL,
 

@@ -140,7 +140,8 @@ def get_students(
                 room,
                 department,
                 course,
-                year
+                year,
+                semester
             FROM students
             WHERE department = ?
         """, (department,))
@@ -156,7 +157,8 @@ def get_students(
                 room,
                 department,
                 course,
-                year
+                year,
+                semester
             FROM students
         """)
 
@@ -516,6 +518,7 @@ async def enroll_student_face_endpoint(
     department: Optional[str] = None,
     course: Optional[str] = None,
     year: Optional[int] = None,
+    semester: Optional[int] = None,
     files: List[UploadFile] = File(...),
     current_user: dict = Depends(require_roles("ADMIN"))
 ):
@@ -557,7 +560,8 @@ async def enroll_student_face_endpoint(
             images=images,
             department=department,
             course=course,
-            year=year
+            year=year,
+            semester=semester
         )
 
     except ValueError as error:
@@ -581,14 +585,17 @@ async def enroll_student_face_endpoint(
 class TimetableEntryRequest(BaseModel):
 
     # Required, and in this order deliberately: department -> course
-    # -> year is the procedure the Timetabling Admin dashboard's own
-    # form now follows (docs/PRD.md §6, §8) — it's the same triple a
-    # student's own profile carries (see me_service.py), so it's
-    # what actually lets the system route an entry to the right
-    # students' schedules rather than just a course+year guess.
+    # -> year -> semester is the procedure the Timetabling Admin
+    # dashboard's own form now follows (docs/PRD.md §6, §8) — it's
+    # the same quadruple a student's own profile carries (see
+    # me_service.py), so it's what actually lets the system route an
+    # entry to the right students' schedules for the right half of
+    # the year, rather than just a course+year guess that can't tell
+    # semester 1 and semester 2 apart.
     department: str
     course: str
     year: int
+    semester: int
     day_of_week: str
     start_time: str
     end_time: str
@@ -608,10 +615,17 @@ def get_timetable(
     year: Optional[int] = None,
     department: Optional[str] = None,
     facilitator: Optional[str] = None,
+    semester: Optional[int] = None,
     current_user: dict = Depends(require_roles("ADMIN", "STUDENT", "LECTURER"))
 ):
 
-    return timetable_service.list_entries(course, year, department, facilitator)
+    return timetable_service.list_entries(
+        course=course,
+        year=year,
+        department=department,
+        facilitator=facilitator,
+        semester=semester
+    )
 
 
 @app.post("/timetable")
@@ -634,7 +648,8 @@ def create_timetable_entry(
             facilitator=request.facilitator,
             venue=request.venue,
             created_by=current_user["username"],
-            department=request.department
+            department=request.department,
+            semester=request.semester
         )
 
     except ValueError as error:

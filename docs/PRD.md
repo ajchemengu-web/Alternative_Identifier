@@ -321,9 +321,11 @@ pipeline described above.
 ### 7.5 Timetabling → Schedule pipeline
 
 The **Directorate of Timetabling Admin** creates/updates/cancels timetables
-per course and year; on upload, students are **automatically enrolled into
-the correct Schedule/Intraday view** based on their course-and-year profile
-section — no manual per-student assignment needed.
+per department, course, year, **and semester** (semester 1 and semester 2
+commonly run different schedules for the same course & year); on upload,
+students are **automatically enrolled into the correct Schedule/Intraday
+view** based on their own department/course/year/semester profile section —
+no manual per-student assignment needed.
 
 ---
 

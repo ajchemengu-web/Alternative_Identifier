@@ -29,6 +29,7 @@ def _create_schema(path):
             course TEXT NOT NULL,
             year INTEGER NOT NULL,
             department TEXT,
+            semester INTEGER,
             day_of_week TEXT NOT NULL,
             start_time TEXT NOT NULL,
             end_time TEXT NOT NULL,

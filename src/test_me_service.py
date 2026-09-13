@@ -33,6 +33,7 @@ def _create_schema(path):
             department TEXT,
             course TEXT,
             year INTEGER,
+            semester INTEGER,
             embedding_file TEXT NOT NULL,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )
@@ -69,10 +70,12 @@ if __name__ == "__main__":
     connection.execute("""
         INSERT INTO students (
             student_id, full_name, admission_number,
-            hostel, room, department, course, year, embedding_file
+            hostel, room, department, course, year, semester,
+            embedding_file
         )
         VALUES ('S1', 'Alice Wanjiru', 'AD001', 'N/A', 'N/A',
-                'School of Computing', 'BSc Computer Science', 2, 'na.npy')
+                'School of Computing', 'BSc Computer Science', 2, 1,
+                'na.npy')
     """)
 
     connection.execute("""
@@ -129,6 +132,7 @@ if __name__ == "__main__":
     assert profile["student_id"] == "S1"
     assert profile["course"] == "BSc Computer Science"
     assert profile["year"] == 2
+    assert profile["semester"] == 1
     print("Linked student profile resolved ->", profile)
 
     # ------------------------------------------------------------
