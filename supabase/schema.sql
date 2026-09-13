@@ -3,7 +3,8 @@
 -- Mirrors the existing SQLite prototype schema (src/database.py plus
 -- src/upgrade_unknown_persons.py, src/upgrade_unknown_embeddings.py,
 -- src/upgrade_database.py, src/upgrade_liveness_logging.py,
--- src/upgrade_timetable_table.py, src/upgrade_dean_fields.py),
+-- src/upgrade_timetable_table.py, src/upgrade_dean_fields.py,
+-- src/upgrade_cameras_table.py),
 -- translated to Postgres syntax, for docs/PRD.md §10's move off
 -- SQLite for production.
 --
@@ -91,6 +92,26 @@ create index if not exists timetable_entries_course_year_idx
 create index if not exists timetable_entries_department_idx
     on timetable_entries (department);
 
+create table if not exists cameras (
+    id bigint generated always as identity primary key,
+    camera_id text unique not null,
+    name text not null,
+    camera_type text not null,
+    location text,
+    department text,
+    source text,
+    status text not null default 'OFFLINE',
+    enabled boolean not null default true,
+    created_by text,
+    created_at timestamptz not null default now()
+);
+
+create index if not exists cameras_type_idx
+    on cameras (camera_type);
+
+create index if not exists cameras_department_idx
+    on cameras (department);
+
 create table if not exists access_logs (
     id bigint generated always as identity primary key,
     person_type text not null,
@@ -126,3 +147,4 @@ alter table unknown_persons enable row level security;
 alter table access_logs enable row level security;
 alter table users enable row level security;
 alter table timetable_entries enable row level security;
+alter table cameras enable row level security;

@@ -17,6 +17,7 @@ from src.services import auth_service
 from src.services.enrollment_service import enroll_student_face
 from src.services import timetable_service
 from src.services import dean_service
+from src.services import camera_service
 from src.api.deps import require_admin_tier, require_roles
 
 
@@ -615,3 +616,168 @@ def get_dean_summary(
 ):
 
     return dean_service.get_summary(department)
+
+
+# ==========================================
+# CAMERA MANAGEMENT (docs/PRD.md §8)
+# ==========================================
+#
+# A persisted registry (src/services/camera_service.py) separate
+# from the runtime CameraManager in src/camera/ that actually drives
+# camera hardware for the live recognition pipeline — see that
+# service's own module docstring for why. Any admin can view the
+# registry (the Dean uses ?department= for "venue camera access"
+# scoped to their school); only the Original Admin can provision or
+# remove a camera; the Original and Security Admins can update a
+# camera's configuration/status ("camera management control" and
+# "camera access/configuration within SmartAccess" respectively).
+
+class CameraRequest(BaseModel):
+
+    camera_id: str
+    name: str
+    camera_type: str
+    location: Optional[str] = None
+    department: Optional[str] = None
+    source: Optional[str] = None
+
+
+class CameraUpdateRequest(BaseModel):
+
+    name: Optional[str] = None
+    location: Optional[str] = None
+    source: Optional[str] = None
+    enabled: Optional[bool] = None
+
+
+class CameraStatusRequest(BaseModel):
+
+    status: str
+
+
+@app.get("/cameras")
+def get_cameras(
+    camera_type: Optional[str] = None,
+    department: Optional[str] = None,
+    status: Optional[str] = None,
+    current_user: dict = Depends(require_roles("ADMIN"))
+):
+
+    return camera_service.list_cameras(camera_type, department, status)
+
+
+@app.post("/cameras")
+def create_camera(
+    request: CameraRequest,
+    current_user: dict = Depends(
+        require_admin_tier("ORIGINAL")
+    )
+):
+
+    try:
+
+        return camera_service.create_camera(
+            camera_id=request.camera_id,
+            name=request.name,
+            camera_type=request.camera_type,
+            location=request.location,
+            department=request.department,
+            source=request.source,
+            created_by=current_user["username"]
+        )
+
+    except ValueError as error:
+
+        raise HTTPException(
+            status_code=400,
+            detail=str(error)
+        )
+
+
+@app.patch("/cameras/{camera_id}")
+def update_camera(
+    camera_id: str,
+    request: CameraUpdateRequest,
+    current_user: dict = Depends(
+        require_admin_tier("ORIGINAL", "SECURITY")
+    )
+):
+
+    try:
+
+        updated = camera_service.update_camera(
+            camera_id,
+            name=request.name,
+            location=request.location,
+            source=request.source,
+            enabled=request.enabled
+        )
+
+    except ValueError as error:
+
+        raise HTTPException(
+            status_code=400,
+            detail=str(error)
+        )
+
+    if not updated:
+
+        raise HTTPException(
+            status_code=404,
+            detail="Camera not found"
+        )
+
+    return {"success": True}
+
+
+@app.patch("/cameras/{camera_id}/status")
+def update_camera_status(
+    camera_id: str,
+    request: CameraStatusRequest,
+    current_user: dict = Depends(
+        require_admin_tier("ORIGINAL", "SECURITY")
+    )
+):
+
+    try:
+
+        updated = camera_service.update_status(
+            camera_id,
+            request.status
+        )
+
+    except ValueError as error:
+
+        raise HTTPException(
+            status_code=400,
+            detail=str(error)
+        )
+
+    if not updated:
+
+        raise HTTPException(
+            status_code=404,
+            detail="Camera not found"
+        )
+
+    return {"success": True}
+
+
+@app.delete("/cameras/{camera_id}")
+def delete_camera(
+    camera_id: str,
+    current_user: dict = Depends(
+        require_admin_tier("ORIGINAL")
+    )
+):
+
+    deleted = camera_service.delete_camera(camera_id)
+
+    if not deleted:
+
+        raise HTTPException(
+            status_code=404,
+            detail="Camera not found"
+        )
+
+    return {"success": True}

@@ -182,6 +182,43 @@ def initialize_database():
     """)
 
 
+    # =========================================
+    # CAMERAS TABLE (Original Admin "camera
+    # management control", Security Admin
+    # "camera access/configuration within
+    # SmartAccess", Dean "venue camera access" —
+    # docs/PRD.md §8)
+    # =========================================
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS cameras (
+
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+        camera_id TEXT UNIQUE NOT NULL,
+
+        name TEXT NOT NULL,
+
+        camera_type TEXT NOT NULL,
+
+        location TEXT,
+
+        department TEXT,
+
+        source TEXT,
+
+        status TEXT NOT NULL DEFAULT 'OFFLINE',
+
+        enabled BOOLEAN NOT NULL DEFAULT 1,
+
+        created_by TEXT,
+
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+
+    )
+    """)
+
+
     connection.commit()
 
     connection.close()
