@@ -43,6 +43,12 @@ def initialize_database():
 
         room TEXT NOT NULL,
 
+        department TEXT,
+
+        course TEXT,
+
+        year INTEGER,
+
         embedding_file TEXT NOT NULL,
 
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -151,6 +157,8 @@ def initialize_database():
         course TEXT NOT NULL,
 
         year INTEGER NOT NULL,
+
+        department TEXT,
 
         day_of_week TEXT NOT NULL,
 

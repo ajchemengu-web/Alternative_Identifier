@@ -26,6 +26,11 @@ from src.services.recognition_service import (
 # fields). Lecturer/Staff/Guard facial enrollment need their own
 # table(s) before they can be wired up the same way — flagged here
 # rather than forced into the student schema.
+#
+# department/course/year are optional, free-text (docs/PRD.md §8):
+# they scope a student into the Dean of School Admin's roster and
+# don't gate anything here — a student enrolled without them just
+# doesn't show up in a department-filtered Dean view yet.
 
 
 os.makedirs(
@@ -67,7 +72,10 @@ def enroll_student_face(
     admission_number,
     hostel,
     room,
-    images
+    images,
+    department=None,
+    course=None,
+    year=None
 ):
 
     if not images:
@@ -131,15 +139,21 @@ def enroll_student_face(
                 admission_number,
                 hostel,
                 room,
+                department,
+                course,
+                year,
                 embedding_file
             )
-            VALUES (?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             student_id,
             full_name,
             admission_number,
             hostel,
             room,
+            department,
+            course,
+            year,
             embedding_filename
         ))
 
@@ -174,6 +188,12 @@ def enroll_student_face(
         "hostel": hostel,
 
         "room": room,
+
+        "department": department,
+
+        "course": course,
+
+        "year": year,
 
         "samples_used": len(samples),
 

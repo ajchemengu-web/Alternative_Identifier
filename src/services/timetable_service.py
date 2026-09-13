@@ -51,7 +51,8 @@ def create_entry(
     unit_name,
     facilitator,
     venue,
-    created_by=None
+    created_by=None,
+    department=None
 ):
 
     day = day_of_week.upper()
@@ -70,6 +71,7 @@ def create_entry(
         INSERT INTO timetable_entries (
             course,
             year,
+            department,
             day_of_week,
             start_time,
             end_time,
@@ -79,10 +81,11 @@ def create_entry(
             status,
             created_by
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'ON', ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'ON', ?)
     """, (
         course,
         year,
+        department,
         day,
         start_time,
         end_time,
@@ -102,6 +105,8 @@ def create_entry(
 
         "year": year,
 
+        "department": department,
+
         "day_of_week": day,
 
         "start_time": start_time,
@@ -120,7 +125,7 @@ def create_entry(
     }
 
 
-def list_entries(course=None, year=None):
+def list_entries(course=None, year=None, department=None):
 
     connection = get_connection()
 
@@ -143,6 +148,12 @@ def list_entries(course=None, year=None):
         query += " AND year = ?"
 
         params.append(year)
+
+    if department:
+
+        query += " AND department = ?"
+
+        params.append(department)
 
     query += " ORDER BY course, year, day_of_week, start_time"
 

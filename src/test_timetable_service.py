@@ -12,6 +12,7 @@ def _create_schema(path):
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             course TEXT NOT NULL,
             year INTEGER NOT NULL,
+            department TEXT,
             day_of_week TEXT NOT NULL,
             start_time TEXT NOT NULL,
             end_time TEXT NOT NULL,
@@ -55,11 +56,13 @@ if __name__ == "__main__":
         unit_name="Data Structures",
         facilitator="Dr. Otieno",
         venue="Hall A",
-        created_by="timetabling_admin"
+        created_by="timetabling_admin",
+        department="School of Computing"
     )
 
     assert entry["day_of_week"] == "MONDAY"
     assert entry["status"] == "ON"
+    assert entry["department"] == "School of Computing"
     print("Created entry ->", entry)
 
     timetable_service.create_entry(
@@ -107,6 +110,19 @@ if __name__ == "__main__":
     )
     assert len(year_1_entries) == 1
     print(f"Year 1 entries: {len(year_1_entries)}")
+
+    department_entries = timetable_service.list_entries(
+        department="School of Computing"
+    )
+    assert len(department_entries) == 1
+    assert department_entries[0]["unit_name"] == "Data Structures"
+    print(f"Department-filtered entries: {len(department_entries)}")
+
+    no_department_match = timetable_service.list_entries(
+        department="School of Business"
+    )
+    assert len(no_department_match) == 0
+    print("Non-matching department filter returns no entries, as expected")
 
     # ------------------------------------------------------------
     # UPDATE STATUS

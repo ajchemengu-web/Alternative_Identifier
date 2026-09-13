@@ -16,6 +16,7 @@ from src.services.guard_service import (
 from src.services import auth_service
 from src.services.enrollment_service import enroll_student_face
 from src.services import timetable_service
+from src.services import dean_service
 from src.api.deps import require_admin_tier, require_roles
 
 
@@ -70,21 +71,45 @@ def health():
 # ==========================================
 
 @app.get("/students")
-def get_students(current_user: dict = Depends(require_roles("ADMIN"))):
+def get_students(
+    department: Optional[str] = None,
+    current_user: dict = Depends(require_roles("ADMIN"))
+):
 
     connection = get_connection()
 
     cursor = connection.cursor()
 
-    cursor.execute("""
-        SELECT
-            student_id,
-            full_name,
-            admission_number,
-            hostel,
-            room
-        FROM students
-    """)
+    if department:
+
+        cursor.execute("""
+            SELECT
+                student_id,
+                full_name,
+                admission_number,
+                hostel,
+                room,
+                department,
+                course,
+                year
+            FROM students
+            WHERE department = ?
+        """, (department,))
+
+    else:
+
+        cursor.execute("""
+            SELECT
+                student_id,
+                full_name,
+                admission_number,
+                hostel,
+                room,
+                department,
+                course,
+                year
+            FROM students
+        """)
 
     students = cursor.fetchall()
 
@@ -383,6 +408,9 @@ async def enroll_student_face_endpoint(
     admission_number: str,
     hostel: str,
     room: str,
+    department: Optional[str] = None,
+    course: Optional[str] = None,
+    year: Optional[int] = None,
     files: List[UploadFile] = File(...),
     current_user: dict = Depends(require_roles("ADMIN"))
 ):
@@ -421,7 +449,10 @@ async def enroll_student_face_endpoint(
             admission_number=admission_number,
             hostel=hostel,
             room=room,
-            images=images
+            images=images,
+            department=department,
+            course=course,
+            year=year
         )
 
     except ValueError as error:
@@ -452,6 +483,7 @@ class TimetableEntryRequest(BaseModel):
     unit_name: str
     facilitator: str
     venue: str
+    department: Optional[str] = None
 
 
 class TimetableStatusRequest(BaseModel):
@@ -463,10 +495,11 @@ class TimetableStatusRequest(BaseModel):
 def get_timetable(
     course: Optional[str] = None,
     year: Optional[int] = None,
+    department: Optional[str] = None,
     current_user: dict = Depends(require_roles("ADMIN"))
 ):
 
-    return timetable_service.list_entries(course, year)
+    return timetable_service.list_entries(course, year, department)
 
 
 @app.post("/timetable")
@@ -488,7 +521,8 @@ def create_timetable_entry(
             unit_name=request.unit_name,
             facilitator=request.facilitator,
             venue=request.venue,
-            created_by=current_user["username"]
+            created_by=current_user["username"],
+            department=request.department
         )
 
     except ValueError as error:
@@ -550,3 +584,34 @@ def delete_timetable_entry(
         )
 
     return {"success": True}
+
+
+# ==========================================
+# DEAN OF SCHOOL ADMIN (docs/PRD.md §8)
+# ==========================================
+#
+# Roster + timetable/unit totals scoped to a department. "Class
+# logs" and "venue camera access" (also part of this tier's PRD
+# scope) need the classroom-camera pipeline and camera management,
+# neither of which exist in this backend yet.
+
+@app.get("/dean/roster")
+def get_dean_roster(
+    department: Optional[str] = None,
+    current_user: dict = Depends(
+        require_admin_tier("DEAN", "ORIGINAL")
+    )
+):
+
+    return dean_service.get_roster(department)
+
+
+@app.get("/dean/summary")
+def get_dean_summary(
+    department: Optional[str] = None,
+    current_user: dict = Depends(
+        require_admin_tier("DEAN", "ORIGINAL")
+    )
+):
+
+    return dean_service.get_summary(department)
