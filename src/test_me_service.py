@@ -38,6 +38,16 @@ def _create_schema(path):
         )
     """)
 
+    connection.execute("""
+        CREATE TABLE IF NOT EXISTS lecturers (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            lecturer_id TEXT UNIQUE NOT NULL,
+            full_name TEXT NOT NULL,
+            department TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
     connection.commit()
     connection.close()
 
@@ -86,6 +96,25 @@ if __name__ == "__main__":
         VALUES ('bob.guard', 'hash', 'bob@example.com', 'GUARD')
     """)
 
+    connection.execute("""
+        INSERT INTO lecturers (lecturer_id, full_name, department)
+        VALUES ('L1', 'Dr. Otieno', 'School of Computing')
+    """)
+
+    connection.execute("""
+        INSERT INTO users (
+            username, password_hash, email, role, linked_person_id
+        )
+        VALUES ('otieno.lecturer', 'hash', 'otieno@example.com', 'LECTURER', 'L1')
+    """)
+
+    connection.execute("""
+        INSERT INTO users (
+            username, password_hash, email, role, linked_person_id
+        )
+        VALUES ('orphan.lecturer', 'hash', 'orphanl@example.com', 'LECTURER', 'L99')
+    """)
+
     connection.commit()
     connection.close()
 
@@ -125,6 +154,26 @@ if __name__ == "__main__":
     missing_profile = me_service.get_my_student_profile("nobody")
     assert missing_profile is None
     print("Unknown username resolves to None, as expected")
+
+    # ------------------------------------------------------------
+    # LINKED LECTURER
+    # ------------------------------------------------------------
+
+    lecturer_profile = me_service.get_my_lecturer_profile("otieno.lecturer")
+    assert lecturer_profile is not None
+    assert lecturer_profile["lecturer_id"] == "L1"
+    assert lecturer_profile["full_name"] == "Dr. Otieno"
+    print("Linked lecturer profile resolved ->", lecturer_profile)
+
+    orphan_lecturer_profile = me_service.get_my_lecturer_profile(
+        "orphan.lecturer"
+    )
+    assert orphan_lecturer_profile is None
+    print("Orphaned lecturer linked_person_id resolves to None, as expected")
+
+    missing_lecturer_profile = me_service.get_my_lecturer_profile("nobody")
+    assert missing_lecturer_profile is None
+    print("Unknown username (lecturer lookup) resolves to None, as expected")
 
     import shutil
     shutil.rmtree(temp_dir)

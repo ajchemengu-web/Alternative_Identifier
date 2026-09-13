@@ -219,6 +219,28 @@ def initialize_database():
     """)
 
 
+    # =========================================
+    # LECTURERS TABLE (SmartAttendance's "my own
+    # units" lookup, docs/PRD.md §6, Phase 2)
+    # =========================================
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS lecturers (
+
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+        lecturer_id TEXT UNIQUE NOT NULL,
+
+        full_name TEXT NOT NULL,
+
+        department TEXT,
+
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+
+    )
+    """)
+
+
     connection.commit()
 
     connection.close()

@@ -124,6 +124,19 @@ if __name__ == "__main__":
     assert len(no_department_match) == 0
     print("Non-matching department filter returns no entries, as expected")
 
+    facilitator_entries = timetable_service.list_entries(
+        facilitator="Dr. Kamau"
+    )
+    assert len(facilitator_entries) == 1
+    assert facilitator_entries[0]["unit_name"] == "Intro to Programming"
+    print(f"Facilitator-filtered entries: {len(facilitator_entries)}")
+
+    no_facilitator_match = timetable_service.list_entries(
+        facilitator="Dr. Nobody"
+    )
+    assert len(no_facilitator_match) == 0
+    print("Non-matching facilitator filter returns no entries, as expected")
+
     # ------------------------------------------------------------
     # UPDATE STATUS
     # ------------------------------------------------------------

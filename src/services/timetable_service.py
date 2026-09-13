@@ -125,7 +125,7 @@ def create_entry(
     }
 
 
-def list_entries(course=None, year=None, department=None):
+def list_entries(course=None, year=None, department=None, facilitator=None):
 
     connection = get_connection()
 
@@ -154,6 +154,18 @@ def list_entries(course=None, year=None, department=None):
         query += " AND department = ?"
 
         params.append(department)
+
+    if facilitator:
+
+        # Free-text match, same lightweight style as course/year/
+        # department (no facilitator/lecturer foreign key) — see this
+        # module's docstring. A lecturer's own "My Units" view
+        # (docs/PRD.md §6) depends on their `lecturers.full_name`
+        # being entered here exactly as the Timetabling Admin typed
+        # it into this entry's facilitator field.
+        query += " AND facilitator = ?"
+
+        params.append(facilitator)
 
     query += " ORDER BY course, year, day_of_week, start_time"
 

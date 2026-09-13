@@ -22,6 +22,7 @@ from src.services import timetable_service
 from src.services import dean_service
 from src.services import camera_service
 from src.services import me_service
+from src.services import lecturer_service
 from src.services import retention_service
 from src.api.deps import require_admin_tier, require_roles
 
@@ -543,10 +544,11 @@ def get_timetable(
     course: Optional[str] = None,
     year: Optional[int] = None,
     department: Optional[str] = None,
-    current_user: dict = Depends(require_roles("ADMIN"))
+    facilitator: Optional[str] = None,
+    current_user: dict = Depends(require_roles("ADMIN", "STUDENT", "LECTURER"))
 ):
 
-    return timetable_service.list_entries(course, year, department)
+    return timetable_service.list_entries(course, year, department, facilitator)
 
 
 @app.post("/timetable")
@@ -836,25 +838,88 @@ def delete_camera(
 #
 # Students/lecturers don't use the web dashboards (docs/PRD.md §4) —
 # this is for the separate SmartAttendance app to resolve its own
-# logged-in user to a course/year it can request a timetable for.
+# logged-in user to what it can request a timetable for (a
+# student's course/year, or a lecturer's own name to match against
+# timetable_entries.facilitator).
 
 @app.get("/me")
 def get_me(
-    current_user: dict = Depends(require_roles("STUDENT"))
+    current_user: dict = Depends(require_roles("STUDENT", "LECTURER"))
 ):
 
-    profile = me_service.get_my_student_profile(
-        current_user["username"]
-    )
+    if current_user["role"] == "STUDENT":
+
+        profile = me_service.get_my_student_profile(
+            current_user["username"]
+        )
+
+        not_found_detail = "No linked student profile found for this account"
+
+    else:
+
+        profile = me_service.get_my_lecturer_profile(
+            current_user["username"]
+        )
+
+        not_found_detail = "No linked lecturer profile found for this account"
 
     if profile is None:
 
         raise HTTPException(
             status_code=404,
-            detail="No linked student profile found for this account"
+            detail=not_found_detail
         )
 
-    return profile
+    return {**profile, "role": current_user["role"]}
+
+
+# ==========================================
+# LECTURER PROFILES (docs/PRD.md §5, §6)
+# ==========================================
+#
+# A lecturer profile (full_name/department, no facial embedding —
+# see lecturer_service.py's docstring) that an admin creates before
+# enrolling that person's LECTURER login via POST /enroll,
+# referencing this lecturer_id as linked_person_id. Lets
+# SmartAttendance resolve a logged-in lecturer to their own units
+# via GET /me + GET /timetable?facilitator=.
+
+class LecturerRequest(BaseModel):
+
+    lecturer_id: str
+    full_name: str
+    department: Optional[str] = None
+
+
+@app.get("/lecturers")
+def get_lecturers(
+    department: Optional[str] = None,
+    current_user: dict = Depends(require_roles("ADMIN"))
+):
+
+    return lecturer_service.list_lecturers(department)
+
+
+@app.post("/lecturers")
+def create_lecturer(
+    request: LecturerRequest,
+    current_user: dict = Depends(require_roles("ADMIN"))
+):
+
+    try:
+
+        return lecturer_service.create_lecturer(
+            lecturer_id=request.lecturer_id,
+            full_name=request.full_name,
+            department=request.department
+        )
+
+    except ValueError as error:
+
+        raise HTTPException(
+            status_code=400,
+            detail=str(error)
+        )
 
 
 # ==========================================

@@ -4,7 +4,7 @@
 -- src/upgrade_unknown_persons.py, src/upgrade_unknown_embeddings.py,
 -- src/upgrade_database.py, src/upgrade_liveness_logging.py,
 -- src/upgrade_timetable_table.py, src/upgrade_dean_fields.py,
--- src/upgrade_cameras_table.py),
+-- src/upgrade_cameras_table.py, src/upgrade_lecturers_table.py),
 -- translated to Postgres syntax, for docs/PRD.md §10's move off
 -- SQLite for production.
 --
@@ -112,6 +112,14 @@ create index if not exists cameras_type_idx
 create index if not exists cameras_department_idx
     on cameras (department);
 
+create table if not exists lecturers (
+    id bigint generated always as identity primary key,
+    lecturer_id text unique not null,
+    full_name text not null,
+    department text,
+    created_at timestamptz not null default now()
+);
+
 create table if not exists access_logs (
     id bigint generated always as identity primary key,
     person_type text not null,
@@ -148,3 +156,4 @@ alter table access_logs enable row level security;
 alter table users enable row level security;
 alter table timetable_entries enable row level security;
 alter table cameras enable row level security;
+alter table lecturers enable row level security;
