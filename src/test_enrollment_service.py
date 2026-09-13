@@ -65,6 +65,9 @@ def _create_schema(path):
             admission_number TEXT UNIQUE NOT NULL,
             hostel TEXT NOT NULL,
             room TEXT NOT NULL,
+            department TEXT,
+            course TEXT,
+            year INTEGER,
             embedding_file TEXT NOT NULL,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )
@@ -192,6 +195,30 @@ if __name__ == "__main__":
         raise AssertionError("Expected ValueError for no images")
     except ValueError as error:
         print("Empty image list rejected as expected:", error)
+
+    # ------------------------------------------------------------
+    # department/course/year (Dean of School scoping, docs/PRD.md §8)
+    # -> optional, stored when supplied
+    # ------------------------------------------------------------
+
+    _queue_faces([_FakeFace([0.5, 0.5, 0.0])])
+
+    classified_result = enrollment_service.enroll_student_face(
+        student_id="STU-103",
+        full_name="Carol Classified",
+        admission_number="ADM-103",
+        hostel="Nyayo",
+        room="A4",
+        images=[blank_image],
+        department="School of Computing",
+        course="BSc Computer Science",
+        year=2
+    )
+
+    assert classified_result["department"] == "School of Computing"
+    assert classified_result["course"] == "BSc Computer Science"
+    assert classified_result["year"] == 2
+    print("department/course/year stored when supplied ->", classified_result)
 
     import shutil
     shutil.rmtree(temp_dir)
