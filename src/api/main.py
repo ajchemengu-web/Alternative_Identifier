@@ -19,6 +19,7 @@ from src.services.guard_service import (
 from src.services import auth_service
 from src.services.enrollment_service import enroll_student_face
 from src.services import timetable_service
+from src.services import unit_service
 from src.services import dean_service
 from src.services import camera_service
 from src.services import me_service
@@ -575,6 +576,156 @@ async def enroll_student_face_endpoint(
 
 
 # ==========================================
+# UNITS (docs/PRD.md §6, §8)
+# ==========================================
+#
+# The unit registry: the Timetabling Admin creates a unit once
+# (unit_code/unit_name/department/course/year/semester); a lecturer
+# then claims the units they teach from the app. A timetable entry
+# references a unit_id instead of a facilitator name typed fresh
+# each time (see unit_service.py's docstring and
+# TimetableEntryRequest below).
+
+class UnitRequest(BaseModel):
+
+    unit_code: str
+    unit_name: str
+    course: str
+    year: int
+    semester: int
+    department: Optional[str] = None
+
+
+class UnitLecturerRequest(BaseModel):
+
+    lecturer_id: Optional[str] = None
+
+
+@app.get("/units")
+def get_units(
+    department: Optional[str] = None,
+    course: Optional[str] = None,
+    year: Optional[int] = None,
+    semester: Optional[int] = None,
+    lecturer_id: Optional[str] = None,
+    unclaimed: Optional[bool] = None,
+    current_user: dict = Depends(require_roles("ADMIN", "LECTURER"))
+):
+
+    return unit_service.list_units(
+        department=department,
+        course=course,
+        year=year,
+        semester=semester,
+        lecturer_id=lecturer_id,
+        unclaimed=unclaimed
+    )
+
+
+@app.post("/units")
+def create_unit_endpoint(
+    request: UnitRequest,
+    current_user: dict = Depends(
+        require_admin_tier("TIMETABLING", "ORIGINAL")
+    )
+):
+
+    try:
+
+        return unit_service.create_unit(
+            unit_code=request.unit_code,
+            unit_name=request.unit_name,
+            course=request.course,
+            year=request.year,
+            semester=request.semester,
+            department=request.department,
+            created_by=current_user["username"]
+        )
+
+    except ValueError as error:
+
+        raise HTTPException(
+            status_code=400,
+            detail=str(error)
+        )
+
+
+@app.patch("/units/{unit_id}/claim")
+def claim_unit_endpoint(
+    unit_id: int,
+    current_user: dict = Depends(require_roles("LECTURER"))
+):
+
+    profile = me_service.get_my_lecturer_profile(current_user["username"])
+
+    if profile is None:
+
+        raise HTTPException(
+            status_code=404,
+            detail="No linked lecturer profile for this account"
+        )
+
+    try:
+
+        return unit_service.claim_unit(unit_id, profile["lecturer_id"])
+
+    except ValueError as error:
+
+        raise HTTPException(
+            status_code=409,
+            detail=str(error)
+        )
+
+
+@app.patch("/units/{unit_id}/unclaim")
+def unclaim_unit_endpoint(
+    unit_id: int,
+    current_user: dict = Depends(require_roles("LECTURER"))
+):
+
+    profile = me_service.get_my_lecturer_profile(current_user["username"])
+
+    if profile is None:
+
+        raise HTTPException(
+            status_code=404,
+            detail="No linked lecturer profile for this account"
+        )
+
+    try:
+
+        return unit_service.unclaim_unit(unit_id, profile["lecturer_id"])
+
+    except ValueError as error:
+
+        raise HTTPException(
+            status_code=409,
+            detail=str(error)
+        )
+
+
+@app.patch("/units/{unit_id}/lecturer")
+def set_unit_lecturer_endpoint(
+    unit_id: int,
+    request: UnitLecturerRequest,
+    current_user: dict = Depends(
+        require_admin_tier("TIMETABLING", "ORIGINAL")
+    )
+):
+
+    try:
+
+        return unit_service.set_unit_lecturer(unit_id, request.lecturer_id)
+
+    except ValueError as error:
+
+        raise HTTPException(
+            status_code=400,
+            detail=str(error)
+        )
+
+
+# ==========================================
 # TIMETABLING (docs/PRD.md §8)
 # ==========================================
 #
@@ -584,23 +735,14 @@ async def enroll_student_face_endpoint(
 
 class TimetableEntryRequest(BaseModel):
 
-    # Required, and in this order deliberately: department -> course
-    # -> year -> semester is the procedure the Timetabling Admin
-    # dashboard's own form now follows (docs/PRD.md §6, §8) — it's
-    # the same quadruple a student's own profile carries (see
-    # me_service.py), so it's what actually lets the system route an
-    # entry to the right students' schedules for the right half of
-    # the year, rather than just a course+year guess that can't tell
-    # semester 1 and semester 2 apart.
-    department: str
-    course: str
-    year: int
-    semester: int
+    # A unit already carries its own department/course/year/semester
+    # and (once claimed) its lecturer — see unit_service.py's
+    # docstring — so creating an entry only needs the unit plus
+    # when/where it meets.
+    unit_id: int
     day_of_week: str
     start_time: str
     end_time: str
-    unit_name: str
-    facilitator: str
     venue: str
 
 
@@ -616,6 +758,8 @@ def get_timetable(
     department: Optional[str] = None,
     facilitator: Optional[str] = None,
     semester: Optional[int] = None,
+    lecturer_id: Optional[str] = None,
+    unit_id: Optional[int] = None,
     current_user: dict = Depends(require_roles("ADMIN", "STUDENT", "LECTURER"))
 ):
 
@@ -624,7 +768,9 @@ def get_timetable(
         year=year,
         department=department,
         facilitator=facilitator,
-        semester=semester
+        semester=semester,
+        lecturer_id=lecturer_id,
+        unit_id=unit_id
     )
 
 
@@ -639,17 +785,12 @@ def create_timetable_entry(
     try:
 
         return timetable_service.create_entry(
-            course=request.course,
-            year=request.year,
+            unit_id=request.unit_id,
             day_of_week=request.day_of_week,
             start_time=request.start_time,
             end_time=request.end_time,
-            unit_name=request.unit_name,
-            facilitator=request.facilitator,
             venue=request.venue,
-            created_by=current_user["username"],
-            department=request.department,
-            semester=request.semester
+            created_by=current_user["username"]
         )
 
     except ValueError as error:

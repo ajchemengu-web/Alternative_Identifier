@@ -327,6 +327,17 @@ students are **automatically enrolled into the correct Schedule/Intraday
 view** based on their own department/course/year/semester profile section —
 no manual per-student assignment needed.
 
+Each timetable entry references a **unit** (`SCO 104`, etc.) rather than a
+facilitator name typed fresh per entry. A unit is created once by the
+Timetabling Admin (`unit_code`/`unit_name`/department/course/year/semester);
+a lecturer then **self-registers the units they teach** from the
+SmartAttendance app, which is what populates that unit's lecturer and, in
+turn, the "My Units" schedule the app derives for them (`GET
+/timetable?lecturer_id=`) — an ID match, not a name string a typo could
+silently break. The Timetabling Admin (or Original Admin) can still
+directly (re)assign a unit's lecturer to correct a mistake or cover a unit
+before its lecturer has registered.
+
 ---
 
 ## 8. Admin Tiers & Dashboard

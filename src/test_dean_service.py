@@ -24,17 +24,45 @@ def _create_schema(path):
     """)
 
     connection.execute("""
+        CREATE TABLE IF NOT EXISTS units (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            unit_code TEXT UNIQUE NOT NULL,
+            unit_name TEXT NOT NULL,
+            department TEXT,
+            course TEXT NOT NULL,
+            year INTEGER NOT NULL,
+            semester INTEGER NOT NULL,
+            lecturer_id TEXT,
+            created_by TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+    connection.execute("""
+        CREATE TABLE IF NOT EXISTS lecturers (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            lecturer_id TEXT UNIQUE NOT NULL,
+            full_name TEXT NOT NULL,
+            department TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+    connection.execute("""
         CREATE TABLE IF NOT EXISTS timetable_entries (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            unit_id INTEGER,
+            unit_code TEXT,
             course TEXT NOT NULL,
             year INTEGER NOT NULL,
             department TEXT,
             semester INTEGER,
+            lecturer_id TEXT,
             day_of_week TEXT NOT NULL,
             start_time TEXT NOT NULL,
             end_time TEXT NOT NULL,
             unit_name TEXT NOT NULL,
-            facilitator TEXT NOT NULL,
+            facilitator TEXT,
             venue TEXT NOT NULL,
             status TEXT NOT NULL DEFAULT 'ON',
             created_by TEXT,
@@ -101,45 +129,63 @@ if __name__ == "__main__":
     raw_connection.commit()
     raw_connection.close()
 
-    from src.services import timetable_service, dean_service
+    from src.services import unit_service, timetable_service, dean_service
 
-    timetable_service.create_entry(
+    data_structures = unit_service.create_unit(
+        unit_code="SCO 104",
+        unit_name="Data Structures",
         course="BSc Computer Science",
         year=2,
+        semester=1,
+        department="School of Computing",
+        created_by="timetabling_admin"
+    )
+
+    intro_to_programming = unit_service.create_unit(
+        unit_code="SCO 100",
+        unit_name="Intro to Programming",
+        course="BSc Computer Science",
+        year=1,
+        semester=1,
+        department="School of Computing",
+        created_by="timetabling_admin"
+    )
+
+    accounting = unit_service.create_unit(
+        unit_code="BCM 101",
+        unit_name="Accounting",
+        course="BCom",
+        year=1,
+        semester=1,
+        department="School of Business",
+        created_by="timetabling_admin"
+    )
+
+    timetable_service.create_entry(
+        unit_id=data_structures["id"],
         day_of_week="MONDAY",
         start_time="09:00",
         end_time="11:00",
-        unit_name="Data Structures",
-        facilitator="Dr. Otieno",
         venue="Hall A",
-        created_by="timetabling_admin",
-        department="School of Computing"
+        created_by="timetabling_admin"
     )
 
     timetable_service.create_entry(
-        course="BSc Computer Science",
-        year=1,
+        unit_id=intro_to_programming["id"],
         day_of_week="TUESDAY",
         start_time="08:00",
         end_time="10:00",
-        unit_name="Intro to Programming",
-        facilitator="Dr. Kamau",
         venue="Hall C",
-        created_by="timetabling_admin",
-        department="School of Computing"
+        created_by="timetabling_admin"
     )
 
     timetable_service.create_entry(
-        course="BCom",
-        year=1,
+        unit_id=accounting["id"],
         day_of_week="WEDNESDAY",
         start_time="10:00",
         end_time="12:00",
-        unit_name="Accounting",
-        facilitator="Dr. Mwangi",
         venue="Hall D",
-        created_by="timetabling_admin",
-        department="School of Business"
+        created_by="timetabling_admin"
     )
 
     # ------------------------------------------------------------

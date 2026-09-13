@@ -5,7 +5,8 @@
 -- src/upgrade_database.py, src/upgrade_liveness_logging.py,
 -- src/upgrade_timetable_table.py, src/upgrade_dean_fields.py,
 -- src/upgrade_cameras_table.py, src/upgrade_lecturers_table.py,
--- src/upgrade_false_positive_tracking.py, src/upgrade_semester_field.py),
+-- src/upgrade_false_positive_tracking.py, src/upgrade_semester_field.py,
+-- src/upgrade_units_table.py),
 -- translated to Postgres syntax, for docs/PRD.md §10's move off
 -- SQLite for production.
 --
@@ -72,17 +73,36 @@ create table if not exists users (
     created_at timestamptz not null default now()
 );
 
+create table if not exists units (
+    id bigint generated always as identity primary key,
+    unit_code text unique not null,
+    unit_name text not null,
+    department text,
+    course text not null,
+    year integer not null,
+    semester integer not null,
+    lecturer_id text,
+    created_by text,
+    created_at timestamptz not null default now()
+);
+
+create index if not exists units_lecturer_idx
+    on units (lecturer_id);
+
 create table if not exists timetable_entries (
     id bigint generated always as identity primary key,
+    unit_id bigint,
+    unit_code text,
     course text not null,
     year integer not null,
     department text,
     semester integer,
+    lecturer_id text,
     day_of_week text not null,
     start_time text not null,
     end_time text not null,
     unit_name text not null,
-    facilitator text not null,
+    facilitator text,
     venue text not null,
     status text not null default 'ON',
     created_by text,
@@ -94,6 +114,9 @@ create index if not exists timetable_entries_course_year_idx
 
 create index if not exists timetable_entries_department_idx
     on timetable_entries (department);
+
+create index if not exists timetable_entries_lecturer_idx
+    on timetable_entries (lecturer_id);
 
 create table if not exists cameras (
     id bigint generated always as identity primary key,

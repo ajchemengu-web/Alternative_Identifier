@@ -155,14 +155,60 @@ def initialize_database():
 
 
     # =========================================
+    # UNITS TABLE (unit registry — docs/PRD.md
+    # §6, §8: a unit has exactly one assigned
+    # lecturer, set by that lecturer claiming
+    # it, not by an admin typing a facilitator
+    # name onto every timetable row)
+    # =========================================
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS units (
+
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+        unit_code TEXT UNIQUE NOT NULL,
+
+        unit_name TEXT NOT NULL,
+
+        department TEXT,
+
+        course TEXT NOT NULL,
+
+        year INTEGER NOT NULL,
+
+        semester INTEGER NOT NULL,
+
+        lecturer_id TEXT,
+
+        created_by TEXT,
+
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+
+    )
+    """)
+
+
+    # =========================================
     # TIMETABLE ENTRIES TABLE (Directorate of
-    # Timetabling Admin, docs/PRD.md §8)
+    # Timetabling Admin, docs/PRD.md §8). Each
+    # entry references a unit (unit_id); the
+    # unit's own course/year/department/
+    # semester/unit_name/lecturer are snapshot
+    # onto the entry at creation time so every
+    # existing reader (student schedule, Dean
+    # summary, analytics) keeps working off
+    # plain columns without a join.
     # =========================================
 
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS timetable_entries (
 
         id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+        unit_id INTEGER,
+
+        unit_code TEXT,
 
         course TEXT NOT NULL,
 
@@ -172,6 +218,8 @@ def initialize_database():
 
         semester INTEGER,
 
+        lecturer_id TEXT,
+
         day_of_week TEXT NOT NULL,
 
         start_time TEXT NOT NULL,
@@ -180,7 +228,7 @@ def initialize_database():
 
         unit_name TEXT NOT NULL,
 
-        facilitator TEXT NOT NULL,
+        facilitator TEXT,
 
         venue TEXT NOT NULL,
 
