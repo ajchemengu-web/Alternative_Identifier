@@ -1,3 +1,6 @@
+import asyncio
+from contextlib import asynccontextmanager
+
 from fastapi import Depends, FastAPI, UploadFile, File, HTTPException
 from pydantic import BaseModel
 from typing import List, Optional
@@ -19,13 +22,55 @@ from src.services import timetable_service
 from src.services import dean_service
 from src.services import camera_service
 from src.services import me_service
+from src.services import retention_service
 from src.api.deps import require_admin_tier, require_roles
+
+
+# ==========================================
+# DATA RETENTION SWEEP (docs/PRD.md §9)
+# ==========================================
+#
+# Runs purge_expired_guests() on a timer for the lifetime of the
+# process, so an admitted guest's facial data is actually deleted
+# ~24 hours after admission rather than only being denied at
+# recognition time. POST /admin/retention/sweep (below) covers the
+# same ground on demand — useful for an operator, a test, or an
+# external cron hitting a deployment where this in-process loop
+# isn't relied on.
+
+RETENTION_SWEEP_INTERVAL_SECONDS = 3600
+
+
+async def _retention_sweep_loop():
+
+    while True:
+
+        try:
+
+            retention_service.purge_expired_guests()
+
+        except Exception as error:
+
+            print(f"[retention] sweep failed: {error}")
+
+        await asyncio.sleep(RETENTION_SWEEP_INTERVAL_SECONDS)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+
+    task = asyncio.create_task(_retention_sweep_loop())
+
+    yield
+
+    task.cancel()
 
 
 app = FastAPI(
     title="Smart Hostel Security API",
     description="AI-powered hostel access management system",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan
 )
 
 
@@ -810,3 +855,26 @@ def get_me(
         )
 
     return profile
+
+
+# ==========================================
+# DATA RETENTION (docs/PRD.md §9)
+# ==========================================
+#
+# The lifespan-managed loop above already runs this on a timer;
+# this lets an Original Admin (or an external cron against a real
+# deployment) trigger the same sweep on demand.
+
+@app.post("/admin/retention/sweep")
+def run_retention_sweep(
+    current_user: dict = Depends(
+        require_admin_tier("ORIGINAL")
+    )
+):
+
+    purged_guest_ids = retention_service.purge_expired_guests()
+
+    return {
+        "purged_guest_ids": purged_guest_ids,
+        "count": len(purged_guest_ids)
+    }

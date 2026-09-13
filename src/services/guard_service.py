@@ -4,6 +4,7 @@ import shutil
 from datetime import datetime, timedelta
 
 from src.db import get_connection as _get_raw_connection
+from src.services import retention_service
 
 
 UNKNOWN_EMBEDDINGS_FOLDER = os.path.join(
@@ -152,6 +153,10 @@ def reject_unknown_person(
 
     connection.close()
 
+    # Rejected guest facial data is deleted immediately, not just
+    # marked rejected (docs/PRD.md §9.4) — the row above stays as an
+    # audit record, but the actual image/embedding files go now.
+    retention_service.purge_rejected_person(unknown_id)
 
     return {
 
