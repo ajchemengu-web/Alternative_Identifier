@@ -330,6 +330,8 @@ def initialize_database():
 
         embedding_file TEXT,
 
+        linked_student_id TEXT,
+
         created_by TEXT,
 
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,

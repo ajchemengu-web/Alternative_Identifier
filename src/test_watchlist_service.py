@@ -80,6 +80,7 @@ def _create_schema(path):
             reason TEXT,
             status TEXT NOT NULL DEFAULT 'ACTIVE',
             embedding_file TEXT,
+            linked_student_id TEXT,
             created_by TEXT,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             resolved_by TEXT,
@@ -123,6 +124,10 @@ if __name__ == "__main__":
     from src.services import watchlist_service
     watchlist_service.TARGET_EMBEDDINGS_FOLDER = temp_embeddings_dir
     os.makedirs(temp_embeddings_dir, exist_ok=True)
+
+    temp_student_embeddings_dir = os.path.join(temp_dir, "student_embeddings")
+    watchlist_service.STUDENT_EMBEDDINGS_FOLDER = temp_student_embeddings_dir
+    os.makedirs(temp_student_embeddings_dir, exist_ok=True)
 
     blank_image = np.zeros((100, 100, 3), dtype=np.uint8)
 
@@ -177,15 +182,71 @@ if __name__ == "__main__":
         print("No usable face in the photo raised, as expected:", error)
 
     # ------------------------------------------------------------
+    # CREATE — neither full_name nor admission_number -> rejected
+    # ------------------------------------------------------------
+
+    try:
+        watchlist_service.create_target()
+        raise AssertionError("Expected ValueError with no identity supplied")
+    except ValueError as error:
+        print("No full_name/admission_number raised, as expected:", error)
+
+    # ------------------------------------------------------------
+    # CREATE — by admission_number: reuses an enrolled student's own
+    # embedding and derives full_name from their record, ignoring any
+    # full_name explicitly supplied alongside it
+    # ------------------------------------------------------------
+
+    student_embedding = np.array([0.6, 0.8, 0.0], dtype=np.float32)
+    np.save(
+        os.path.join(temp_student_embeddings_dir, "STU-1.npy"),
+        student_embedding
+    )
+
+    connection = sqlite3.connect(temp_db_path)
+    connection.execute("""
+        INSERT INTO students (
+            student_id, full_name, admission_number,
+            hostel, room, embedding_file
+        )
+        VALUES ('STU-1', 'Alice Wanjiru', 'ADM-100', 'Nyayo', 'A1', 'STU-1.npy')
+    """)
+    connection.commit()
+    connection.close()
+
+    linked_target = watchlist_service.create_target(
+        full_name="This name should be overridden",
+        reason="Under investigation",
+        admission_number="ADM-100",
+        created_by="security1"
+    )
+
+    assert linked_target["full_name"] == "Alice Wanjiru"
+    assert linked_target["linked_student_id"] == "STU-1"
+    assert linked_target["embedding_file"] is not None
+
+    copied_embedding = np.load(
+        os.path.join(temp_embeddings_dir, linked_target["embedding_file"])
+    )
+    assert np.allclose(copied_embedding, student_embedding)
+    print("Created target from an enrolled student's admission_number ->", linked_target)
+
+    try:
+        watchlist_service.create_target(admission_number="ADM-NOPE")
+        raise AssertionError("Expected ValueError for an unknown admission_number")
+    except ValueError as error:
+        print("Unknown admission_number raised, as expected:", error)
+
+    # ------------------------------------------------------------
     # LIST / FILTER
     # ------------------------------------------------------------
 
     all_targets = watchlist_service.list_targets()
-    assert len(all_targets) == 2
+    assert len(all_targets) == 3
     print(f"All targets: {len(all_targets)}")
 
     active_targets = watchlist_service.list_targets(status="active")
-    assert len(active_targets) == 2
+    assert len(active_targets) == 3
     print(f"Active targets: {len(active_targets)}")
 
     # ------------------------------------------------------------
@@ -202,7 +263,7 @@ if __name__ == "__main__":
     assert refreshed["resolved_by"] == "security1"
     print("Target resolved ->", refreshed)
 
-    assert len(watchlist_service.list_targets(status="active")) == 1
+    assert len(watchlist_service.list_targets(status="active")) == 2
     print("Resolved target excluded from the active filter")
 
     missing_resolve = watchlist_service.resolve_target("TGT-NOPE", "x")

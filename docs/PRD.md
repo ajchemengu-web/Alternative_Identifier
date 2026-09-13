@@ -233,13 +233,17 @@ A dashboard surface dedicated to SmartAccess itself, separate from the
 routine access-log/analytics view in §6.3:
 - **Watchlist ("target tracking")** — the Security or Original Admin
   registers a person of interest (name, description, reason, optional
-  reference photos). A target with a stored photo is checked by the live
-  recognition pipeline **ahead of students/guests** — a target match is a
-  security override, so it wins even over an otherwise-legitimate member,
-  and access is denied rather than auto-admitted. Unlike STUDENT/GUEST
-  matches, every live sighting is logged (no cooldown throttling), giving
-  a per-entrance, per-timestamp sighting history for that target — that
-  history is what "tracking" means here.
+  reference photos) — **or, if that person is already enrolled as a
+  student, by their admission_number**, which reuses that student's own
+  stored embedding and derives the target's name from their record
+  instead of requiring a fresh photo. A target with a stored embedding is
+  checked by the live recognition pipeline **ahead of students/guests** —
+  a target match is a security override, so it wins even over an
+  otherwise-legitimate member, and access is denied rather than
+  auto-admitted. Unlike STUDENT/GUEST matches, every live sighting is
+  logged (no cooldown throttling), giving a per-entrance, per-timestamp
+  sighting history for that target — that history is what "tracking"
+  means here.
 - **Investigations** — a lightweight case file (title, description,
   status OPEN/CLOSED, optionally linked to one watchlist target) with an
   append-only note timeline, for building a record around a target or an

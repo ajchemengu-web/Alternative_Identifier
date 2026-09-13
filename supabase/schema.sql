@@ -160,6 +160,7 @@ create table if not exists watchlist_targets (
     reason text,
     status text not null default 'ACTIVE',
     embedding_file text,
+    linked_student_id text,
     created_by text,
     created_at timestamptz not null default now(),
     resolved_by text,

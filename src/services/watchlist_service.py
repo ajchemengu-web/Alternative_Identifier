@@ -5,7 +5,7 @@ import uuid
 import numpy as np
 
 from src.db import get_connection
-from src.services.recognition_service import app
+from src.services.recognition_service import app, STUDENT_EMBEDDINGS_FOLDER
 
 
 # ============================================================
@@ -14,7 +14,10 @@ from src.services.recognition_service import app
 #
 # SmartAccess "target tracking" (docs/PRD.md §8, Security Admin
 # dashboard): a target is a person of interest the Security/Original
-# Admin registers, optionally with reference photos. A target with a
+# Admin registers, either with reference photos or — if the person
+# is already enrolled as a student — by their admission_number, which
+# copies that student's own stored embedding instead of requiring a
+# fresh photo (see _copy_student_embedding()). A target with a
 # stored embedding is checked by the live recognition pipeline
 # (recognition_service.IdentityCache.targets, ahead of students/
 # guests — a target flag overrides normal admission even for an
@@ -66,17 +69,86 @@ def _embedding_from_image(image):
     return embedding / np.linalg.norm(embedding), None
 
 
+def _find_student_by_admission_number(admission_number):
+
+    connection = get_connection()
+
+    connection.row_factory = sqlite3.Row
+
+    cursor = connection.cursor()
+
+    cursor.execute("""
+        SELECT student_id, full_name, embedding_file
+        FROM students
+        WHERE admission_number = ?
+    """, (admission_number,))
+
+    row = cursor.fetchone()
+
+    connection.close()
+
+    return _row_to_dict(row)
+
+
+def _copy_student_embedding(target_id, admission_number):
+
+    # Reuses an already-enrolled student's own stored embedding
+    # instead of requiring a fresh photo — copied (not referenced)
+    # so this target's own tracking history and matchability outlive
+    # that students row (e.g. after a graduation-triggered deletion,
+    # docs/PRD.md §9).
+
+    student = _find_student_by_admission_number(admission_number)
+
+    if student is None:
+
+        raise ValueError(
+            f"No enrolled student found with admission_number: "
+            f"{admission_number}"
+        )
+
+    source_path = os.path.join(
+        STUDENT_EMBEDDINGS_FOLDER,
+        student["embedding_file"]
+    )
+
+    if not os.path.exists(source_path):
+
+        raise ValueError(
+            "That student's facial embedding file is missing on disk."
+        )
+
+    embedding = np.load(source_path)
+
+    embedding_filename = f"{target_id}.npy"
+
+    np.save(
+        os.path.join(TARGET_EMBEDDINGS_FOLDER, embedding_filename),
+        embedding
+    )
+
+    return embedding_filename, student
+
+
 def create_target(
-    full_name,
+    full_name=None,
     description=None,
     reason=None,
     images=None,
+    admission_number=None,
     created_by=None
 ):
+
+    if not full_name and not admission_number:
+
+        raise ValueError(
+            "Either full_name or admission_number is required."
+        )
 
     target_id = f"TGT-{uuid.uuid4().hex[:8].upper()}"
 
     embedding_filename = None
+    linked_student_id = None
 
     if images:
 
@@ -113,6 +185,19 @@ def create_target(
             final_embedding
         )
 
+    elif admission_number:
+
+        # Already registered in the facial database — reuse that
+        # record's identity/embedding rather than asking the admin to
+        # retype a name or supply a fresh photo.
+        embedding_filename, student = _copy_student_embedding(
+            target_id, admission_number
+        )
+
+        linked_student_id = student["student_id"]
+
+        full_name = student["full_name"]
+
     connection = get_connection()
 
     cursor = connection.cursor()
@@ -125,15 +210,17 @@ def create_target(
             reason,
             status,
             embedding_file,
+            linked_student_id,
             created_by
         )
-        VALUES (?, ?, ?, ?, 'ACTIVE', ?, ?)
+        VALUES (?, ?, ?, ?, 'ACTIVE', ?, ?, ?)
     """, (
         target_id,
         full_name,
         description,
         reason,
         embedding_filename,
+        linked_student_id,
         created_by
     ))
 

@@ -1180,15 +1180,19 @@ def run_retention_sweep(
 #
 # SmartAccess-specific: a dedicated dashboard for the Security Admin
 # (or Original Admin, as overall owner) to register and track
-# persons of interest. A target with reference photos is checked by
-# the live recognition pipeline ahead of students/guests — see
+# persons of interest, either with reference photos or — if already
+# enrolled as a student — by admission_number, which reuses that
+# student's own stored embedding (full_name is then derived from the
+# student record too). A target with a stored embedding is checked
+# by the live recognition pipeline ahead of students/guests — see
 # watchlist_service.py and access_service.py's TARGET_MATCH branch.
 
 @app.post("/watchlist")
 async def create_watchlist_target(
-    full_name: str,
+    full_name: Optional[str] = None,
     description: Optional[str] = None,
     reason: Optional[str] = None,
+    admission_number: Optional[str] = None,
     images: List[UploadFile] = File(default=[]),
     current_user: dict = Depends(
         require_admin_tier("SECURITY", "ORIGINAL")
@@ -1228,6 +1232,7 @@ async def create_watchlist_target(
             description=description,
             reason=reason,
             images=decoded_images,
+            admission_number=admission_number,
             created_by=current_user["username"]
         )
 

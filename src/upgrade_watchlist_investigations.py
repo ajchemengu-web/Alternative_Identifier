@@ -25,6 +25,7 @@ cursor.execute("""
         reason TEXT,
         status TEXT NOT NULL DEFAULT 'ACTIVE',
         embedding_file TEXT,
+        linked_student_id TEXT,
         created_by TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         resolved_by TEXT,
@@ -33,6 +34,27 @@ cursor.execute("""
 """)
 
 print("✅ watchlist_targets table ready")
+
+
+cursor.execute("PRAGMA table_info(watchlist_targets)")
+
+watchlist_columns = [
+    column[1]
+    for column in cursor.fetchall()
+]
+
+if "linked_student_id" not in watchlist_columns:
+
+    cursor.execute("""
+        ALTER TABLE watchlist_targets
+        ADD COLUMN linked_student_id TEXT
+    """)
+
+    print("✅ Added watchlist_targets.linked_student_id")
+
+else:
+
+    print("ℹ️ watchlist_targets.linked_student_id already exists")
 
 
 print("Checking investigations table...")
