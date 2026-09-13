@@ -31,6 +31,13 @@ from src.db import get_connection
 # until real infrastructure is available.
 
 
+# Which Smart Gen product a camera belongs to: CHECKPOINT cameras
+# are SmartAccess (checkpoints/gates); CLASSROOM cameras are
+# SmartAttendance. src/api/main.py's CameraRequest requires
+# location and source (the IP camera's RTSP/HTTP stream address)
+# at creation for the same reason — a camera registry entry only
+# means something once you know which product it serves, where it
+# physically is, and how to reach it.
 CAMERA_TYPES = {
     "CHECKPOINT",
     "CLASSROOM"

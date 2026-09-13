@@ -898,15 +898,23 @@ def get_dean_summary(
 # remove a camera; the Original and Security Admins can update a
 # camera's configuration/status ("camera management control" and
 # "camera access/configuration within SmartAccess" respectively).
+#
+# camera_type is which product this camera serves —
+# CHECKPOINT = SmartAccess (a gate/checkpoint), CLASSROOM =
+# SmartAttendance — see camera_service.CAMERA_TYPES. location and
+# source (the IP camera's RTSP/HTTP stream address) are required at
+# creation: a camera registered without either isn't meaningfully
+# addable — the whole point of manually adding an IP camera here is
+# recording where it is and how to reach it.
 
 class CameraRequest(BaseModel):
 
     camera_id: str
     name: str
     camera_type: str
-    location: Optional[str] = None
+    location: str
+    source: str
     department: Optional[str] = None
-    source: Optional[str] = None
 
 
 class CameraUpdateRequest(BaseModel):

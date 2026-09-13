@@ -383,7 +383,11 @@ in their profile determines what they see.
    retrofitted later.
 6. **Camera provisioning** happens from inside SmartAccess (checkpoint
    cameras) or SmartAttendance (classroom cameras) admin surfaces — one
-   underlying camera-management service, two consumption contexts.
+   underlying camera-management service, two consumption contexts. Adding
+   a camera requires picking which of the two it serves (`camera_type`:
+   CHECKPOINT or CLASSROOM), plus its specific location and IP
+   address/stream URL — a camera entry without those isn't usable by
+   either product.
 7. **False positives** are a tracked first-class concept in both products
    (SmartAccess: verified member flagged as unknown guest; SmartAttendance:
    wrongly marked present/absent) and must be both correctable by a human
