@@ -62,6 +62,24 @@ create table if not exists users (
     created_at timestamptz not null default now()
 );
 
+create table if not exists timetable_entries (
+    id bigint generated always as identity primary key,
+    course text not null,
+    year integer not null,
+    day_of_week text not null,
+    start_time text not null,
+    end_time text not null,
+    unit_name text not null,
+    facilitator text not null,
+    venue text not null,
+    status text not null default 'ON',
+    created_by text,
+    created_at timestamptz not null default now()
+);
+
+create index if not exists timetable_entries_course_year_idx
+    on timetable_entries (course, year);
+
 create table if not exists access_logs (
     id bigint generated always as identity primary key,
     person_type text not null,
@@ -83,16 +101,17 @@ create index if not exists unknown_persons_status_idx on unknown_persons (status
 -- ROW LEVEL SECURITY
 -- ============================================================
 --
--- There is no users/roles table yet (that lands with the Enrollment
--- Dashboard and admin tiers described in docs/PRD.md §5, §8), so for
--- now these tables are locked down to the service role only: the
--- FastAPI backend connects with the Supabase service key, which
--- bypasses RLS, while every other role (anon, authenticated) is
--- denied by default once RLS is enabled and no policy grants access.
--- Replace this with per-role policies once the roles table exists.
+-- The `users` table backs request-level auth on the FastAPI side
+-- (a Bearer JWT per user, checked in src/api/deps.py) rather than
+-- Postgres-level roles, so these tables stay locked down to the
+-- service role only: the FastAPI backend connects with the Supabase
+-- service key, which bypasses RLS, while every other role (anon,
+-- authenticated) is denied by default once RLS is enabled and no
+-- policy grants access.
 
 alter table students enable row level security;
 alter table guests enable row level security;
 alter table unknown_persons enable row level security;
 alter table access_logs enable row level security;
 alter table users enable row level security;
+alter table timetable_entries enable row level security;

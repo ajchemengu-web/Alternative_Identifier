@@ -15,6 +15,7 @@ from src.services.guard_service import (
 )
 from src.services import auth_service
 from src.services.enrollment_service import enroll_student_face
+from src.services import timetable_service
 from src.api.deps import require_admin_tier, require_roles
 
 
@@ -431,3 +432,121 @@ async def enroll_student_face_endpoint(
         )
 
     return result
+
+
+# ==========================================
+# TIMETABLING (docs/PRD.md §8)
+# ==========================================
+#
+# Any admin can view a timetable; only the Timetabling Admin (or the
+# Original Admin, as the overall system owner) can create, postpone,
+# cancel, or delete an entry.
+
+class TimetableEntryRequest(BaseModel):
+
+    course: str
+    year: int
+    day_of_week: str
+    start_time: str
+    end_time: str
+    unit_name: str
+    facilitator: str
+    venue: str
+
+
+class TimetableStatusRequest(BaseModel):
+
+    status: str
+
+
+@app.get("/timetable")
+def get_timetable(
+    course: Optional[str] = None,
+    year: Optional[int] = None,
+    current_user: dict = Depends(require_roles("ADMIN"))
+):
+
+    return timetable_service.list_entries(course, year)
+
+
+@app.post("/timetable")
+def create_timetable_entry(
+    request: TimetableEntryRequest,
+    current_user: dict = Depends(
+        require_admin_tier("TIMETABLING", "ORIGINAL")
+    )
+):
+
+    try:
+
+        return timetable_service.create_entry(
+            course=request.course,
+            year=request.year,
+            day_of_week=request.day_of_week,
+            start_time=request.start_time,
+            end_time=request.end_time,
+            unit_name=request.unit_name,
+            facilitator=request.facilitator,
+            venue=request.venue,
+            created_by=current_user["username"]
+        )
+
+    except ValueError as error:
+
+        raise HTTPException(
+            status_code=400,
+            detail=str(error)
+        )
+
+
+@app.patch("/timetable/{entry_id}/status")
+def update_timetable_entry_status(
+    entry_id: int,
+    request: TimetableStatusRequest,
+    current_user: dict = Depends(
+        require_admin_tier("TIMETABLING", "ORIGINAL")
+    )
+):
+
+    try:
+
+        updated = timetable_service.update_status(
+            entry_id,
+            request.status
+        )
+
+    except ValueError as error:
+
+        raise HTTPException(
+            status_code=400,
+            detail=str(error)
+        )
+
+    if not updated:
+
+        raise HTTPException(
+            status_code=404,
+            detail="Timetable entry not found"
+        )
+
+    return {"success": True}
+
+
+@app.delete("/timetable/{entry_id}")
+def delete_timetable_entry(
+    entry_id: int,
+    current_user: dict = Depends(
+        require_admin_tier("TIMETABLING", "ORIGINAL")
+    )
+):
+
+    deleted = timetable_service.delete_entry(entry_id)
+
+    if not deleted:
+
+        raise HTTPException(
+            status_code=404,
+            detail="Timetable entry not found"
+        )
+
+    return {"success": True}

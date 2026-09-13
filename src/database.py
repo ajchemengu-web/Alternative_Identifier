@@ -138,6 +138,42 @@ def initialize_database():
     """)
 
 
+    # =========================================
+    # TIMETABLE ENTRIES TABLE (Directorate of
+    # Timetabling Admin, docs/PRD.md §8)
+    # =========================================
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS timetable_entries (
+
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+        course TEXT NOT NULL,
+
+        year INTEGER NOT NULL,
+
+        day_of_week TEXT NOT NULL,
+
+        start_time TEXT NOT NULL,
+
+        end_time TEXT NOT NULL,
+
+        unit_name TEXT NOT NULL,
+
+        facilitator TEXT NOT NULL,
+
+        venue TEXT NOT NULL,
+
+        status TEXT NOT NULL DEFAULT 'ON',
+
+        created_by TEXT,
+
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+
+    )
+    """)
+
+
     connection.commit()
 
     connection.close()
