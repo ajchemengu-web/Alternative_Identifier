@@ -7,7 +7,7 @@ from typing import List, Optional
 import numpy as np
 import cv2
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timedelta
 from src.db import get_connection as _get_raw_connection
 from src.services.recognition_service import recognize_image
 from src.services.access_service import process_access
@@ -23,6 +23,7 @@ from src.services import dean_service
 from src.services import camera_service
 from src.services import me_service
 from src.services import lecturer_service
+from src.services import analytics_service
 from src.services import retention_service
 from src.api.deps import require_admin_tier, require_roles
 
@@ -224,6 +225,8 @@ def get_access_logs(
             liveness_score,
             decision,
             guard_id,
+            false_positive,
+            false_positive_reason,
             timestamp
         FROM access_logs
         ORDER BY timestamp DESC
@@ -238,6 +241,60 @@ def get_access_logs(
         dict(log)
         for log in logs
     ]
+
+
+# ==========================================
+# FALSE-POSITIVE FLAGGING + ANALYTICS
+# (docs/PRD.md §13 Phase 3)
+# ==========================================
+#
+# There's no ground truth to infer a false positive from
+# automatically — see analytics_service.py's docstring. A Guard or
+# Admin flags one after determining, outside this system, that a
+# VERIFIED entry actually matched the wrong person.
+
+class FalsePositiveRequest(BaseModel):
+
+    reason: str
+
+
+@app.patch("/access-logs/{access_log_id}/false-positive")
+def flag_access_log_false_positive(
+    access_log_id: int,
+    request: FalsePositiveRequest,
+    current_user: dict = Depends(require_roles("ADMIN", "GUARD"))
+):
+
+    updated = analytics_service.flag_false_positive(
+        access_log_id,
+        request.reason,
+        current_user["username"]
+    )
+
+    if not updated:
+
+        raise HTTPException(
+            status_code=404,
+            detail="Access log entry not found"
+        )
+
+    return {"success": True}
+
+
+@app.get("/analytics/summary")
+def get_analytics_summary(
+    since_days: Optional[int] = None,
+    current_user: dict = Depends(require_roles("ADMIN"))
+):
+
+    since = (
+        datetime.now() - timedelta(days=since_days)
+        if since_days is not None
+        else None
+    )
+
+    return analytics_service.get_summary(since)
+
 
 # ==========================================
 # AI FACE RECOGNITION

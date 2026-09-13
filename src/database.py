@@ -138,6 +138,14 @@ def initialize_database():
 
         liveness_score REAL,
 
+        false_positive BOOLEAN NOT NULL DEFAULT 0,
+
+        false_positive_reason TEXT,
+
+        false_positive_reviewed_by TEXT,
+
+        false_positive_reviewed_at DATETIME,
+
         timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
 
     )

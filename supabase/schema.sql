@@ -4,7 +4,8 @@
 -- src/upgrade_unknown_persons.py, src/upgrade_unknown_embeddings.py,
 -- src/upgrade_database.py, src/upgrade_liveness_logging.py,
 -- src/upgrade_timetable_table.py, src/upgrade_dean_fields.py,
--- src/upgrade_cameras_table.py, src/upgrade_lecturers_table.py),
+-- src/upgrade_cameras_table.py, src/upgrade_lecturers_table.py,
+-- src/upgrade_false_positive_tracking.py),
 -- translated to Postgres syntax, for docs/PRD.md §10's move off
 -- SQLite for production.
 --
@@ -129,6 +130,10 @@ create table if not exists access_logs (
     liveness_score real,
     decision text,
     guard_id text,
+    false_positive boolean not null default false,
+    false_positive_reason text,
+    false_positive_reviewed_by text,
+    false_positive_reviewed_at timestamptz,
     timestamp timestamptz not null default now()
 );
 
