@@ -256,7 +256,11 @@ routine access-log/analytics view in §6.3:
   the "who was at this scene, and when" tool an investigation draws on —
   a case's note timeline is where a scene's findings actually get
   attached, consistent with investigations having no separate evidence
-  link table (§6.3a above).
+  link table (§6.3a above). Each person in a scene result also carries
+  **co-occurrence**: who else was logged at that same location within a
+  tight time window (default 5 minutes, adjustable per query) of one of
+  their own sightings — candidate witnesses or associates, surfaced
+  straight from the same query result rather than a second lookup.
   - `POST /recognize` now accepts an optional `camera_id`; when a
     checkpoint device sends one, the matching camera's `location` (§8's
     camera registry) becomes that sighting's `entrance` instead of the

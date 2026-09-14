@@ -1496,6 +1496,7 @@ def get_scene_query(
     location: Optional[str] = None,
     start_time: Optional[str] = None,
     end_time: Optional[str] = None,
+    co_occurrence_minutes: Optional[int] = None,
     current_user: dict = Depends(
         require_admin_tier("SECURITY", "ORIGINAL")
     )
@@ -1504,5 +1505,6 @@ def get_scene_query(
     return scene_service.query_scene(
         location=location,
         start_time=start_time,
-        end_time=end_time
+        end_time=end_time,
+        co_occurrence_minutes=co_occurrence_minutes
     )

@@ -1,4 +1,5 @@
 import sqlite3
+from datetime import datetime, timedelta
 
 from src.db import get_connection
 
@@ -17,6 +18,35 @@ from src.db import get_connection
 # access_logs rows; no new table, consistent with this codebase's
 # no-foreign-key, free-text-matching style (a location is just
 # whatever string a camera's own `location` field holds).
+#
+# Co-occurrence: for each person in the result, who else was logged
+# at that same location within a tight time window of one of their
+# own sightings — candidate witnesses/associates, surfaced straight
+# from the same query result rather than a second lookup.
+
+CO_OCCURRENCE_WINDOW_MINUTES = 5
+
+
+def _parse_timestamp(value):
+
+    # access_logs.timestamp always comes from SQLite's own
+    # DEFAULT CURRENT_TIMESTAMP (src/access_logger.py never supplies
+    # one itself), so this is the one format ever actually stored —
+    # but co-occurrence is a best-effort add-on, so a row that
+    # somehow doesn't match just drops out of the comparison rather
+    # than failing the whole scene query.
+
+    if not value:
+
+        return None
+
+    try:
+
+        return datetime.strptime(value, "%Y-%m-%d %H:%M:%S")
+
+    except ValueError:
+
+        return None
 
 
 def _row_to_dict(row):
@@ -77,7 +107,75 @@ def list_locations():
     return locations
 
 
-def query_scene(location=None, start_time=None, end_time=None):
+def _compute_co_occurrence(sightings, people_by_key, window_minutes):
+
+    window_seconds = window_minutes * 60
+
+    parsed = [
+        (sighting, _parse_timestamp(sighting["timestamp"]))
+        for sighting in sightings
+    ]
+
+    # key -> {other_key: smallest gap in seconds seen between them}
+    best_gap_by_key = {key: {} for key in people_by_key}
+
+    for i, (sighting_a, time_a) in enumerate(parsed):
+
+        if time_a is None:
+
+            continue
+
+        key_a = (sighting_a["person_type"], sighting_a["person_identifier"])
+
+        for sighting_b, time_b in parsed[i + 1:]:
+
+            if time_b is None:
+
+                continue
+
+            key_b = (sighting_b["person_type"], sighting_b["person_identifier"])
+
+            if key_a == key_b:
+
+                continue
+
+            gap = abs((time_a - time_b).total_seconds())
+
+            if gap > window_seconds:
+
+                continue
+
+            for first, second in ((key_a, key_b), (key_b, key_a)):
+
+                existing = best_gap_by_key[first].get(second)
+
+                if existing is None or gap < existing:
+
+                    best_gap_by_key[first][second] = gap
+
+    for key, person in people_by_key.items():
+
+        partners = sorted(
+            best_gap_by_key[key].items(), key=lambda item: item[1]
+        )
+
+        person["co_occurring"] = [
+            {
+                "person_type": other_key[0],
+                "person_identifier": other_key[1],
+                "full_name": people_by_key[other_key]["full_name"],
+                "closest_gap_seconds": int(gap)
+            }
+            for other_key, gap in partners
+        ]
+
+
+def query_scene(
+    location=None,
+    start_time=None,
+    end_time=None,
+    co_occurrence_minutes=None
+):
 
     # Datetime-local inputs arrive as "YYYY-MM-DDTHH:MM"; access_logs
     # timestamps are SQLite's own "YYYY-MM-DD HH:MM:SS" — normalize
@@ -156,10 +254,19 @@ def query_scene(location=None, start_time=None, end_time=None):
 
     connection.close()
 
+    window_minutes = (
+        co_occurrence_minutes
+        if co_occurrence_minutes is not None and co_occurrence_minutes > 0
+        else CO_OCCURRENCE_WINDOW_MINUTES
+    )
+
+    _compute_co_occurrence(sightings, people_by_key, window_minutes)
+
     return {
         "location": location,
         "start_time": start_time,
         "end_time": end_time,
+        "co_occurrence_minutes": window_minutes,
         "people": list(people_by_key.values()),
         "sightings": sightings
     }

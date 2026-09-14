@@ -164,6 +164,50 @@ if __name__ == "__main__":
     assert len(normalized["sightings"]) == 3
     print("datetime-local 'T'-separated input is normalized and matches correctly")
 
+    # ------------------------------------------------------------
+    # CO-OCCURRENCE — who else was seen nearby in time
+    # ------------------------------------------------------------
+    #
+    # STU-1 @ 09:00 and 09:10 bracket TGT-1 @ 09:05 exactly 5 minutes
+    # (300s) on each side — the default window's own boundary, so
+    # both directions must count as co-occurring, not just one.
+
+    default_window = scene_service.query_scene(
+        location="Library Entrance",
+        start_time="2026-09-14 08:00:00",
+        end_time="2026-09-14 10:00:00"
+    )
+    assert default_window["co_occurrence_minutes"] == 5
+
+    people_by_id = {p["person_identifier"]: p for p in default_window["people"]}
+
+    student_partners = people_by_id["STU-1"]["co_occurring"]
+    assert len(student_partners) == 1
+    assert student_partners[0]["person_identifier"] == "TGT-1"
+    assert student_partners[0]["full_name"] == "Person Of Interest"
+    assert student_partners[0]["closest_gap_seconds"] == 300
+
+    target_partners = people_by_id["TGT-1"]["co_occurring"]
+    assert len(target_partners) == 1
+    assert target_partners[0]["person_identifier"] == "STU-1"
+    assert target_partners[0]["closest_gap_seconds"] == 300
+
+    print("Co-occurrence links STU-1 <-> TGT-1 at the 5-minute boundary, both directions")
+
+    # A narrower window (4 minutes) excludes that same 5-minute gap.
+    narrow_window = scene_service.query_scene(
+        location="Library Entrance",
+        start_time="2026-09-14 08:00:00",
+        end_time="2026-09-14 10:00:00",
+        co_occurrence_minutes=4
+    )
+    narrow_people_by_id = {
+        p["person_identifier"]: p for p in narrow_window["people"]
+    }
+    assert narrow_people_by_id["STU-1"]["co_occurring"] == []
+    assert narrow_people_by_id["TGT-1"]["co_occurring"] == []
+    print("A narrower co-occurrence window correctly excludes a 5-minute-apart pair")
+
     import shutil
     shutil.rmtree(temp_dir)
 
