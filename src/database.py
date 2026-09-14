@@ -148,7 +148,13 @@ def initialize_database():
 
         false_positive_reviewed_at DATETIME,
 
-        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+        alert_acknowledged BOOLEAN NOT NULL DEFAULT 0,
+
+        alert_acknowledged_by TEXT,
+
+        alert_acknowledged_at DATETIME
 
     )
     """)
@@ -368,6 +374,10 @@ def initialize_database():
 
         status TEXT NOT NULL DEFAULT 'OPEN',
 
+        severity TEXT NOT NULL DEFAULT 'MEDIUM',
+
+        assigned_to TEXT,
+
         opened_by TEXT,
 
         opened_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -391,6 +401,45 @@ def initialize_database():
         note TEXT NOT NULL,
 
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+
+    )
+    """)
+
+
+    # investigation_targets / investigation_unknowns: many-to-many
+    # link rows beyond the single "primary" target_id above — a case
+    # can involve more than one target, and can reference an
+    # unknown_persons sighting directly rather than only through a
+    # confirmed target or free-text note.
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS investigation_targets (
+
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+        case_id TEXT NOT NULL,
+
+        target_id TEXT NOT NULL,
+
+        linked_by TEXT,
+
+        linked_at DATETIME DEFAULT CURRENT_TIMESTAMP
+
+    )
+    """)
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS investigation_unknowns (
+
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+        case_id TEXT NOT NULL,
+
+        unknown_id TEXT NOT NULL,
+
+        linked_by TEXT,
+
+        linked_at DATETIME DEFAULT CURRENT_TIMESTAMP
 
     )
     """)

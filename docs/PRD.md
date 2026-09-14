@@ -243,24 +243,40 @@ routine access-log/analytics view in §6.3:
   auto-admitted. Unlike STUDENT/GUEST matches, every live sighting is
   logged (no cooldown throttling), giving a per-entrance, per-timestamp
   sighting history for that target — that history is what "tracking"
-  means here.
+  means here. A target's **sighting frequency** — a location-by-location
+  count, highest first — answers "where should we actually watch for
+  this person" without reading the raw timeline by hand.
+- **Target alerts** — every unacknowledged `TARGET_ALERT` access_logs row
+  in one queue, for a dashboard to poll into a live-feeling alert banner.
+  There's no push/email/SMS infrastructure or credentials available to
+  this codebase yet (the same reason `camera_service.py` holds off on
+  anything credential-related), so "live" means a poll against this
+  queue rather than an outbound notification — acknowledging an alert is
+  what actually clears it.
 - **Investigations** — a lightweight case file (title, description,
-  status OPEN/CLOSED, optionally linked to one watchlist target) with an
-  append-only note timeline, for building a record around a target or an
-  incident over time.
+  status OPEN/CLOSED, **severity** LOW/MEDIUM/HIGH/CRITICAL, an
+  **assignee**) with an append-only note timeline, for building a record
+  around an incident over time. A case has one "primary" watchlist
+  target (`target_id`, set at creation) plus two link tables for
+  everything else it can reference: **investigation_targets** (a case
+  can involve more than one target — a suspect and a witness aren't
+  always the same person) and **investigation_unknowns** (a case can
+  reference an `unknown_persons` sighting directly, since most real
+  investigations start from an unrecognized face at a checkpoint, not a
+  pre-registered target).
 - **Scene reconstruction** — pick a location (an access_logs "entrance",
   which a checkpoint camera's own registered `location` now populates —
   see below) and a time window, and see every face access_logs actually
   recognized there during it: each distinct person with their first/last
   seen time and sighting count, plus the raw sighting timeline. This is
   the "who was at this scene, and when" tool an investigation draws on —
-  a case's note timeline is where a scene's findings actually get
-  attached, consistent with investigations having no separate evidence
-  link table (§6.3a above). Each person in a scene result also carries
-  **co-occurrence**: who else was logged at that same location within a
-  tight time window (default 5 minutes, adjustable per query) of one of
-  their own sightings — candidate witnesses or associates, surfaced
-  straight from the same query result rather than a second lookup.
+  a scene's findings get attached to a case via the note timeline, the
+  target link, or the unknown-person link above, whichever fits. Each
+  person in a scene result also carries **co-occurrence**: who else was
+  logged at that same location within a tight time window (default 5
+  minutes, adjustable per query) of one of their own sightings —
+  candidate witnesses or associates, surfaced straight from the same
+  query result rather than a second lookup.
   - `POST /recognize` now accepts an optional `camera_id`; when a
     checkpoint device sends one, the matching camera's `location` (§8's
     camera registry) becomes that sighting's `entrance` instead of the
@@ -388,7 +404,7 @@ in their profile determines what they see.
 | Tier | Scope |
 |---|---|
 | **Original Admin** | System owner. Monitoring dashboard across *all* sections (Access/Attendance). Admits/creates other admins (including Temporary Admins). Camera management control access. |
-| **Security Admin** | Oversight of SmartAccess. Checks camera status. Camera access/configuration within SmartAccess. Controls enrollment. A dedicated SmartAccess dashboard for target tracking (watchlist), investigations, and location+time scene reconstruction (§6.3a). |
+| **Security Admin** | Oversight of SmartAccess. Checks camera status. Camera access/configuration within SmartAccess. Controls enrollment. A dedicated SmartAccess dashboard for target tracking (watchlist, with sighting frequency), live target alerts, investigations (severity/assignment, multi-target and unknown-person links), and location+time scene reconstruction (§6.3a). |
 | **Directorate of Timetabling Admin** | Create/update/cancel timetables. Upload per course & year; auto-pushes to student schedules. |
 | **Dean of School Admin** | Per-school scope: class logs, venue camera access, total student roster by classification, total lectures/units for the department, access to all department timetables. |
 | **Temporary Admin** | Enrollment Dashboard only (data entry + facial enrollment); credentials expire on task completion. |

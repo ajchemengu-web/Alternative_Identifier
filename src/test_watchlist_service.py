@@ -293,19 +293,40 @@ if __name__ == "__main__":
     """, (target["target_id"],))
     connection.execute("""
         INSERT INTO access_logs (person_type, person_identifier, entrance, decision)
+        VALUES ('TARGET', ?, 'Main Gate', 'TARGET_ALERT')
+    """, (target["target_id"],))
+    connection.execute("""
+        INSERT INTO access_logs (person_type, person_identifier, entrance, decision)
         VALUES ('STUDENT', 'STU-1', 'Main Gate', 'VERIFIED')
     """)
     connection.commit()
     connection.close()
 
     sightings = watchlist_service.get_sightings(target["target_id"])
-    assert len(sightings) == 2
+    assert len(sightings) == 3
     assert {row["entrance"] for row in sightings} == {"Main Gate", "Side Gate"}
     print(f"Target sightings (own only, not other people's logs): {len(sightings)} ->", sightings)
 
     no_sightings = watchlist_service.get_sightings(no_photo_target["target_id"])
     assert no_sightings == []
     print("A target never sighted has an empty sightings list, as expected")
+
+    # ------------------------------------------------------------
+    # SIGHTING FREQUENCY — where a target is seen most
+    # ------------------------------------------------------------
+
+    frequency = watchlist_service.get_sighting_frequency(target["target_id"])
+    assert frequency == [
+        {"entrance": "Main Gate", "count": 2},
+        {"entrance": "Side Gate", "count": 1}
+    ]
+    print("Sighting frequency, highest first ->", frequency)
+
+    no_frequency = watchlist_service.get_sighting_frequency(
+        no_photo_target["target_id"]
+    )
+    assert no_frequency == []
+    print("A target never sighted has an empty frequency list, as expected")
 
     import shutil
     shutil.rmtree(temp_dir)

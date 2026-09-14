@@ -355,3 +355,31 @@ def get_sightings(target_id):
     connection.close()
 
     return [_row_to_dict(row) for row in rows]
+
+
+def get_sighting_frequency(target_id):
+
+    # Where a target is actually seen most — a location-by-location
+    # sighting count, sorted highest-first, for the "which checkpoint
+    # should we watch" question get_sightings()'s raw timeline
+    # doesn't answer directly. Built entirely from get_sightings(),
+    # not a second query, so it stays exactly consistent with it.
+
+    sightings = get_sightings(target_id)
+
+    counts = {}
+
+    for sighting in sightings:
+
+        entrance = sighting["entrance"] or "Unknown location"
+
+        counts[entrance] = counts.get(entrance, 0) + 1
+
+    frequency = [
+        {"entrance": entrance, "count": count}
+        for entrance, count in counts.items()
+    ]
+
+    frequency.sort(key=lambda item: item["count"], reverse=True)
+
+    return frequency

@@ -29,6 +29,7 @@ from src.services import retention_service
 from src.services import watchlist_service
 from src.services import investigation_service
 from src.services import scene_service
+from src.services import alerts_service
 from src.api.deps import require_admin_tier, require_roles
 
 
@@ -1296,6 +1297,26 @@ def get_watchlist_sightings(
     return watchlist_service.get_sightings(target_id)
 
 
+@app.get("/watchlist/{target_id}/frequency")
+def get_watchlist_frequency(
+    target_id: str,
+    current_user: dict = Depends(
+        require_admin_tier("SECURITY", "ORIGINAL")
+    )
+):
+
+    target = watchlist_service.get_target(target_id)
+
+    if target is None:
+
+        raise HTTPException(
+            status_code=404,
+            detail="Target not found"
+        )
+
+    return watchlist_service.get_sighting_frequency(target_id)
+
+
 @app.patch("/watchlist/{target_id}/resolve")
 def resolve_watchlist_target(
     target_id: str,
@@ -1351,11 +1372,31 @@ class InvestigationRequest(BaseModel):
     title: str
     description: Optional[str] = None
     target_id: Optional[str] = None
+    severity: Optional[str] = "MEDIUM"
+    assigned_to: Optional[str] = None
+
+
+class InvestigationUpdateRequest(BaseModel):
+
+    title: Optional[str] = None
+    description: Optional[str] = None
+    severity: Optional[str] = None
+    assigned_to: Optional[str] = None
 
 
 class InvestigationNoteRequest(BaseModel):
 
     note: str
+
+
+class LinkTargetRequest(BaseModel):
+
+    target_id: str
+
+
+class LinkUnknownRequest(BaseModel):
+
+    unknown_id: str
 
 
 @app.post("/investigations")
@@ -1366,12 +1407,52 @@ def create_investigation(
     )
 ):
 
-    return investigation_service.create_case(
-        title=request.title,
-        description=request.description,
-        target_id=request.target_id,
-        opened_by=current_user["username"]
+    try:
+
+        return investigation_service.create_case(
+            title=request.title,
+            description=request.description,
+            target_id=request.target_id,
+            severity=request.severity,
+            assigned_to=request.assigned_to,
+            opened_by=current_user["username"]
+        )
+
+    except ValueError as error:
+
+        raise HTTPException(
+            status_code=400,
+            detail=str(error)
+        )
+
+
+@app.patch("/investigations/{case_id}")
+def update_investigation(
+    case_id: str,
+    request: InvestigationUpdateRequest,
+    current_user: dict = Depends(
+        require_admin_tier("SECURITY", "ORIGINAL")
     )
+):
+
+    try:
+
+        return investigation_service.update_case(
+            case_id,
+            title=request.title,
+            description=request.description,
+            severity=request.severity,
+            assigned_to=request.assigned_to
+        )
+
+    except ValueError as error:
+
+        status_code = 404 if "case_id" in str(error) else 400
+
+        raise HTTPException(
+            status_code=status_code,
+            detail=str(error)
+        )
 
 
 @app.get("/investigations")
@@ -1473,6 +1554,98 @@ def reopen_investigation(
     return {"success": True}
 
 
+@app.post("/investigations/{case_id}/targets")
+def link_investigation_target(
+    case_id: str,
+    request: LinkTargetRequest,
+    current_user: dict = Depends(
+        require_admin_tier("SECURITY", "ORIGINAL")
+    )
+):
+
+    try:
+
+        return investigation_service.link_target(
+            case_id,
+            request.target_id,
+            linked_by=current_user["username"]
+        )
+
+    except ValueError as error:
+
+        raise HTTPException(
+            status_code=404,
+            detail=str(error)
+        )
+
+
+@app.delete("/investigations/{case_id}/targets/{target_id}")
+def unlink_investigation_target(
+    case_id: str,
+    target_id: str,
+    current_user: dict = Depends(
+        require_admin_tier("SECURITY", "ORIGINAL")
+    )
+):
+
+    unlinked = investigation_service.unlink_target(case_id, target_id)
+
+    if not unlinked:
+
+        raise HTTPException(
+            status_code=404,
+            detail="That target isn't linked to this case"
+        )
+
+    return {"success": True}
+
+
+@app.post("/investigations/{case_id}/unknowns")
+def link_investigation_unknown(
+    case_id: str,
+    request: LinkUnknownRequest,
+    current_user: dict = Depends(
+        require_admin_tier("SECURITY", "ORIGINAL")
+    )
+):
+
+    try:
+
+        return investigation_service.link_unknown(
+            case_id,
+            request.unknown_id,
+            linked_by=current_user["username"]
+        )
+
+    except ValueError as error:
+
+        raise HTTPException(
+            status_code=404,
+            detail=str(error)
+        )
+
+
+@app.delete("/investigations/{case_id}/unknowns/{unknown_id}")
+def unlink_investigation_unknown(
+    case_id: str,
+    unknown_id: str,
+    current_user: dict = Depends(
+        require_admin_tier("SECURITY", "ORIGINAL")
+    )
+):
+
+    unlinked = investigation_service.unlink_unknown(case_id, unknown_id)
+
+    if not unlinked:
+
+        raise HTTPException(
+            status_code=404,
+            detail="That unknown sighting isn't linked to this case"
+        )
+
+    return {"success": True}
+
+
 # ==========================================
 # SCENE RECONSTRUCTION (docs/PRD.md §8)
 # ==========================================
@@ -1508,3 +1681,45 @@ def get_scene_query(
         end_time=end_time,
         co_occurrence_minutes=co_occurrence_minutes
     )
+
+
+# ==========================================
+# TARGET ALERTS (docs/PRD.md §8)
+# ==========================================
+#
+# Same dashboard/role scope as watchlist/investigations/scene above —
+# every unacknowledged TARGET_ALERT access_logs row, for a dashboard
+# to poll into a live-feeling alert banner. See alerts_service.py for
+# why this is a poll queue rather than an outbound push/SMS/email.
+
+@app.get("/alerts/pending")
+def get_pending_alerts(
+    current_user: dict = Depends(
+        require_admin_tier("SECURITY", "ORIGINAL")
+    )
+):
+
+    return alerts_service.list_pending_alerts()
+
+
+@app.patch("/alerts/{access_log_id}/acknowledge")
+def acknowledge_alert(
+    access_log_id: int,
+    current_user: dict = Depends(
+        require_admin_tier("SECURITY", "ORIGINAL")
+    )
+):
+
+    acknowledged = alerts_service.acknowledge_alert(
+        access_log_id,
+        current_user["username"]
+    )
+
+    if not acknowledged:
+
+        raise HTTPException(
+            status_code=404,
+            detail="No pending alert with that id"
+        )
+
+    return {"success": True}

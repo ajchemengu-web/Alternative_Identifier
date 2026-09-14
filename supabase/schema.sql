@@ -6,7 +6,8 @@
 -- src/upgrade_timetable_table.py, src/upgrade_dean_fields.py,
 -- src/upgrade_cameras_table.py, src/upgrade_lecturers_table.py,
 -- src/upgrade_false_positive_tracking.py, src/upgrade_semester_field.py,
--- src/upgrade_units_table.py, src/upgrade_watchlist_investigations.py),
+-- src/upgrade_units_table.py, src/upgrade_watchlist_investigations.py,
+-- src/upgrade_investigation_enhancements.py),
 -- translated to Postgres syntax, for docs/PRD.md §10's move off
 -- SQLite for production.
 --
@@ -172,6 +173,9 @@ create index if not exists watchlist_targets_status_idx
 
 -- SmartAccess case management, same dashboard/role scope as the
 -- watchlist above — see src/services/investigation_service.py.
+-- target_id is the case's one "primary" target; investigation_targets
+-- and investigation_unknowns below are link tables for everything
+-- else a case can reference (more targets, unknown_persons sightings).
 create table if not exists investigations (
     id bigint generated always as identity primary key,
     case_id text unique not null,
@@ -179,6 +183,8 @@ create table if not exists investigations (
     description text,
     target_id text,
     status text not null default 'OPEN',
+    severity text not null default 'MEDIUM',
+    assigned_to text,
     opened_by text,
     opened_at timestamptz not null default now(),
     closed_by text,
@@ -199,6 +205,28 @@ create table if not exists investigation_notes (
 create index if not exists investigation_notes_case_idx
     on investigation_notes (case_id);
 
+create table if not exists investigation_targets (
+    id bigint generated always as identity primary key,
+    case_id text not null,
+    target_id text not null,
+    linked_by text,
+    linked_at timestamptz not null default now()
+);
+
+create index if not exists investigation_targets_case_idx
+    on investigation_targets (case_id);
+
+create table if not exists investigation_unknowns (
+    id bigint generated always as identity primary key,
+    case_id text not null,
+    unknown_id text not null,
+    linked_by text,
+    linked_at timestamptz not null default now()
+);
+
+create index if not exists investigation_unknowns_case_idx
+    on investigation_unknowns (case_id);
+
 create table if not exists access_logs (
     id bigint generated always as identity primary key,
     person_type text not null,
@@ -212,7 +240,10 @@ create table if not exists access_logs (
     false_positive_reason text,
     false_positive_reviewed_by text,
     false_positive_reviewed_at timestamptz,
-    timestamp timestamptz not null default now()
+    timestamp timestamptz not null default now(),
+    alert_acknowledged boolean not null default false,
+    alert_acknowledged_by text,
+    alert_acknowledged_at timestamptz
 );
 
 create index if not exists access_logs_timestamp_idx on access_logs (timestamp desc);
@@ -244,3 +275,5 @@ alter table lecturers enable row level security;
 alter table watchlist_targets enable row level security;
 alter table investigations enable row level security;
 alter table investigation_notes enable row level security;
+alter table investigation_targets enable row level security;
+alter table investigation_unknowns enable row level security;
