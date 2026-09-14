@@ -237,6 +237,7 @@ alter table guests enable row level security;
 alter table unknown_persons enable row level security;
 alter table access_logs enable row level security;
 alter table users enable row level security;
+alter table units enable row level security;
 alter table timetable_entries enable row level security;
 alter table cameras enable row level security;
 alter table lecturers enable row level security;
