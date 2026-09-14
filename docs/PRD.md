@@ -248,6 +248,20 @@ routine access-log/analytics view in §6.3:
   status OPEN/CLOSED, optionally linked to one watchlist target) with an
   append-only note timeline, for building a record around a target or an
   incident over time.
+- **Scene reconstruction** — pick a location (an access_logs "entrance",
+  which a checkpoint camera's own registered `location` now populates —
+  see below) and a time window, and see every face access_logs actually
+  recognized there during it: each distinct person with their first/last
+  seen time and sighting count, plus the raw sighting timeline. This is
+  the "who was at this scene, and when" tool an investigation draws on —
+  a case's note timeline is where a scene's findings actually get
+  attached, consistent with investigations having no separate evidence
+  link table (§6.3a above).
+  - `POST /recognize` now accepts an optional `camera_id`; when a
+    checkpoint device sends one, the matching camera's `location` (§8's
+    camera registry) becomes that sighting's `entrance` instead of the
+    single hardcoded gate name — this is what makes location-scoped scene
+    reconstruction meaningful once more than one checkpoint is registered.
 
 ### 6.4 Current prototype status (`Alternative_Identifier`)
 
@@ -370,7 +384,7 @@ in their profile determines what they see.
 | Tier | Scope |
 |---|---|
 | **Original Admin** | System owner. Monitoring dashboard across *all* sections (Access/Attendance). Admits/creates other admins (including Temporary Admins). Camera management control access. |
-| **Security Admin** | Oversight of SmartAccess. Checks camera status. Camera access/configuration within SmartAccess. Controls enrollment. A dedicated SmartAccess dashboard for target tracking (watchlist) and investigations (§6.3a). |
+| **Security Admin** | Oversight of SmartAccess. Checks camera status. Camera access/configuration within SmartAccess. Controls enrollment. A dedicated SmartAccess dashboard for target tracking (watchlist), investigations, and location+time scene reconstruction (§6.3a). |
 | **Directorate of Timetabling Admin** | Create/update/cancel timetables. Upload per course & year; auto-pushes to student schedules. |
 | **Dean of School Admin** | Per-school scope: class logs, venue camera access, total student roster by classification, total lectures/units for the department, access to all department timetables. |
 | **Temporary Admin** | Enrollment Dashboard only (data entry + facial enrollment); credentials expire on task completion. |

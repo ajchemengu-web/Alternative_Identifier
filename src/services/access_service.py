@@ -48,7 +48,7 @@ def should_log(identifier):
 # PROCESS ACCESS DECISION
 # ==========================================
 
-def process_access(recognition_result, image=None):
+def process_access(recognition_result, image=None, entrance="Nyayo Main Gate"):
 
     status = recognition_result.get("status")
 
@@ -77,7 +77,7 @@ def process_access(recognition_result, image=None):
             log_access(
                 person_type="TARGET",
                 person_identifier=target_id,
-                entrance="Nyayo Main Gate",
+                entrance=entrance,
                 recognition_score=score,
                 decision="LIVENESS_FAILED",
                 liveness_score=liveness_score
@@ -115,7 +115,7 @@ def process_access(recognition_result, image=None):
         log_access(
             person_type="TARGET",
             person_identifier=target_id,
-            entrance="Nyayo Main Gate",
+            entrance=entrance,
             recognition_score=score,
             decision="TARGET_ALERT",
             liveness_score=liveness_score
@@ -172,7 +172,7 @@ def process_access(recognition_result, image=None):
                 log_access(
                     person_type="STUDENT",
                     person_identifier=student_id,
-                    entrance="Nyayo Main Gate",
+                    entrance=entrance,
                     recognition_score=score,
                     decision="LIVENESS_FAILED",
                     liveness_score=liveness_score
@@ -216,7 +216,7 @@ def process_access(recognition_result, image=None):
             log_access(
                 person_type="STUDENT",
                 person_identifier=student_id,
-                entrance="Nyayo Main Gate",
+                entrance=entrance,
                 recognition_score=score,
                 decision="VERIFIED",
                 liveness_score=liveness_score
@@ -279,7 +279,7 @@ def process_access(recognition_result, image=None):
                 log_access(
                     person_type="GUEST",
                     person_identifier=guest_id,
-                    entrance="Nyayo Main Gate",
+                    entrance=entrance,
                     recognition_score=score,
                     decision="LIVENESS_FAILED",
                     liveness_score=liveness_score
@@ -315,7 +315,7 @@ def process_access(recognition_result, image=None):
             log_access(
                 person_type="GUEST",
                 person_identifier=guest_id,
-                entrance="Nyayo Main Gate",
+                entrance=entrance,
                 recognition_score=score,
                 decision="AG_VALID",
                 liveness_score=liveness_score

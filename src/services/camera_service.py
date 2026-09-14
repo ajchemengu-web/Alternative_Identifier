@@ -191,6 +191,26 @@ def list_cameras(camera_type=None, department=None, status=None):
     ]
 
 
+def get_camera(camera_id):
+
+    connection = get_connection()
+
+    connection.row_factory = sqlite3.Row
+
+    cursor = connection.cursor()
+
+    cursor.execute(
+        "SELECT * FROM cameras WHERE camera_id = ?",
+        (camera_id,)
+    )
+
+    row = cursor.fetchone()
+
+    connection.close()
+
+    return _row_to_dict(row)
+
+
 def update_camera(camera_id, name=None, location=None, source=None, enabled=None):
 
     fields = []

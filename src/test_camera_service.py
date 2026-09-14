@@ -92,6 +92,18 @@ if __name__ == "__main__":
         print("Duplicate camera_id rejected as expected:", error)
 
     # ------------------------------------------------------------
+    # GET single (scene_service resolves a checkpoint's camera_id
+    # to its registered location this way — see POST /recognize)
+    # ------------------------------------------------------------
+
+    fetched = camera_service.get_camera("CAM-GATE-1")
+    assert fetched["location"] == "Main Gate"
+    print("get_camera fetched the right row ->", fetched)
+
+    assert camera_service.get_camera("CAM-MISSING") is None
+    print("get_camera returns None for an unknown camera_id, as expected")
+
+    # ------------------------------------------------------------
     # LIST / FILTER
     # ------------------------------------------------------------
 

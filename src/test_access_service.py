@@ -197,6 +197,31 @@ if __name__ == "__main__":
     print("Repeat match within cooldown window is not re-logged")
 
     # ------------------------------------------------------------
+    # entrance defaults to the single hardcoded gate, but a caller
+    # (POST /recognize, resolving a checkpoint's registered camera —
+    # see src/api/main.py) can override it per call. This is what
+    # scene_service's location+time scene reconstruction is built on.
+    # ------------------------------------------------------------
+
+    access_service.process_access({
+        "status": "STUDENT",
+        "student_id": "STU-3",
+        "full_name": "Carol Example",
+        "admission_number": "ADM-3",
+        "hostel": "Nyayo",
+        "room": "A3",
+        "recognition_score": 0.9,
+        "liveness_score": 0.8,
+        "is_live": True
+    }, entrance="Library Entrance")
+
+    logged_entrance = sqlite3.connect(temp_db_path).execute(
+        "SELECT entrance FROM access_logs WHERE person_identifier = 'STU-3'"
+    ).fetchone()[0]
+    assert logged_entrance == "Library Entrance"
+    print("Custom entrance override is logged instead of the default gate")
+
+    # ------------------------------------------------------------
     # STUDENT — liveness failed -> REVIEW_REQUIRED, logged LIVENESS_FAILED
     # ------------------------------------------------------------
 

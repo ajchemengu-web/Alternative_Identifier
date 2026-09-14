@@ -1,7 +1,7 @@
 import asyncio
 from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI, UploadFile, File, HTTPException
+from fastapi import Depends, FastAPI, UploadFile, File, Form, HTTPException
 from pydantic import BaseModel
 from typing import List, Optional
 import numpy as np
@@ -28,6 +28,7 @@ from src.services import analytics_service
 from src.services import retention_service
 from src.services import watchlist_service
 from src.services import investigation_service
+from src.services import scene_service
 from src.api.deps import require_admin_tier, require_roles
 
 
@@ -308,6 +309,7 @@ def get_analytics_summary(
 @app.post("/recognize")
 async def recognize(
     file: UploadFile = File(...),
+    camera_id: Optional[str] = Form(None),
     current_user: dict = Depends(require_roles("ADMIN", "GUARD"))
 ):
 
@@ -352,10 +354,29 @@ async def recognize(
 
     recognition_result = recognize_image(image)
 
+    # A guard checkpoint device may identify which registered camera
+    # it's posting from; that camera's own location (docs/PRD.md §8's
+    # camera registry) becomes the access_logs "entrance" for this
+    # sighting, instead of the single hardcoded gate name — this is
+    # what makes scene_service's location+time scene reconstruction
+    # meaningful across more than one checkpoint. Falls back to the
+    # default gate name if no camera_id is sent or it doesn't match a
+    # registered camera.
+    entrance = "Nyayo Main Gate"
+
+    if camera_id:
+
+        camera = camera_service.get_camera(camera_id)
+
+        if camera and camera.get("location"):
+
+            entrance = camera["location"]
+
     access_result = process_access(
-    recognition_result,
-    image
-)
+        recognition_result,
+        image,
+        entrance=entrance
+    )
 
     return access_result
 
@@ -1450,3 +1471,38 @@ def reopen_investigation(
         )
 
     return {"success": True}
+
+
+# ==========================================
+# SCENE RECONSTRUCTION (docs/PRD.md §8)
+# ==========================================
+#
+# Same dashboard/role scope as watchlist/investigations above — pick
+# a location (a scene) and a time window, see every face access_logs
+# actually recognized there during it. See scene_service.py.
+
+@app.get("/scene/locations")
+def get_scene_locations(
+    current_user: dict = Depends(
+        require_admin_tier("SECURITY", "ORIGINAL")
+    )
+):
+
+    return scene_service.list_locations()
+
+
+@app.get("/scene/query")
+def get_scene_query(
+    location: Optional[str] = None,
+    start_time: Optional[str] = None,
+    end_time: Optional[str] = None,
+    current_user: dict = Depends(
+        require_admin_tier("SECURITY", "ORIGINAL")
+    )
+):
+
+    return scene_service.query_scene(
+        location=location,
+        start_time=start_time,
+        end_time=end_time
+    )
