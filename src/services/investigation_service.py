@@ -352,9 +352,34 @@ def link_target(case_id, target_id, linked_by=None):
 
 def unlink_target(case_id, target_id):
 
+    # A case's linked_targets (get_case above) is its "primary"
+    # target_id plus every investigation_targets row, presented as one
+    # uniform list — unlinking has to handle both halves of that, or
+    # unlinking the primary target from the UI would silently no-op.
+
     connection = get_connection()
 
     cursor = connection.cursor()
+
+    cursor.execute(
+        "SELECT target_id FROM investigations WHERE case_id = ?",
+        (case_id,)
+    )
+
+    row = cursor.fetchone()
+
+    if row is not None and row[0] == target_id:
+
+        cursor.execute(
+            "UPDATE investigations SET target_id = NULL WHERE case_id = ?",
+            (case_id,)
+        )
+
+        connection.commit()
+
+        connection.close()
+
+        return True
 
     cursor.execute(
         "DELETE FROM investigation_targets "

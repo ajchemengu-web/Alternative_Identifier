@@ -219,6 +219,17 @@ if __name__ == "__main__":
     assert investigation_service.unlink_target(case["case_id"], "TGT-2") is False
     print("Unlinking an already-unlinked target returns False, as expected")
 
+    # Unlinking the *primary* target_id (not a investigation_targets
+    # row) has to work the same way from the caller's point of view —
+    # otherwise it would silently no-op since there's no join row to
+    # delete for it.
+    unlinked_primary = investigation_service.unlink_target(case["case_id"], "TGT-1")
+    assert unlinked_primary is True
+    after_primary_unlink = investigation_service.get_case(case["case_id"])
+    assert after_primary_unlink["target_id"] is None
+    assert after_primary_unlink["linked_targets"] == []
+    print("Unlinking the primary target clears target_id too, not just a join row")
+
     # ------------------------------------------------------------
     # LINK / UNLINK UNKNOWN_PERSONS SIGHTINGS
     # ------------------------------------------------------------
