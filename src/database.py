@@ -43,6 +43,14 @@ def initialize_database():
 
         room TEXT NOT NULL,
 
+        department TEXT,
+
+        course TEXT,
+
+        year INTEGER,
+
+        semester INTEGER,
+
         embedding_file TEXT NOT NULL,
 
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -79,6 +87,37 @@ def initialize_database():
 
 
     # =========================================
+    # USERS TABLE (Enrollment Dashboard, docs/PRD.md §5)
+    # =========================================
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS users (
+
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+        username TEXT UNIQUE NOT NULL,
+
+        password_hash TEXT NOT NULL,
+
+        email TEXT UNIQUE NOT NULL,
+
+        role TEXT NOT NULL,
+
+        admin_tier TEXT,
+
+        linked_person_id TEXT,
+
+        temp_expires_at DATETIME,
+
+        is_active INTEGER NOT NULL DEFAULT 1,
+
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+
+    )
+    """)
+
+
+    # =========================================
     # ACCESS LOGS TABLE
     # =========================================
 
@@ -99,7 +138,308 @@ def initialize_database():
 
         guard_id TEXT,
 
-        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+        liveness_score REAL,
+
+        false_positive BOOLEAN NOT NULL DEFAULT 0,
+
+        false_positive_reason TEXT,
+
+        false_positive_reviewed_by TEXT,
+
+        false_positive_reviewed_at DATETIME,
+
+        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+        alert_acknowledged BOOLEAN NOT NULL DEFAULT 0,
+
+        alert_acknowledged_by TEXT,
+
+        alert_acknowledged_at DATETIME
+
+    )
+    """)
+
+
+    # =========================================
+    # UNITS TABLE (unit registry — docs/PRD.md
+    # §6, §8: a unit has exactly one assigned
+    # lecturer, set by that lecturer claiming
+    # it, not by an admin typing a facilitator
+    # name onto every timetable row)
+    # =========================================
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS units (
+
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+        unit_code TEXT UNIQUE NOT NULL,
+
+        unit_name TEXT NOT NULL,
+
+        department TEXT,
+
+        course TEXT NOT NULL,
+
+        year INTEGER NOT NULL,
+
+        semester INTEGER NOT NULL,
+
+        lecturer_id TEXT,
+
+        created_by TEXT,
+
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+
+    )
+    """)
+
+
+    # =========================================
+    # TIMETABLE ENTRIES TABLE (Directorate of
+    # Timetabling Admin, docs/PRD.md §8). Each
+    # entry references a unit (unit_id); the
+    # unit's own course/year/department/
+    # semester/unit_name/lecturer are snapshot
+    # onto the entry at creation time so every
+    # existing reader (student schedule, Dean
+    # summary, analytics) keeps working off
+    # plain columns without a join.
+    # =========================================
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS timetable_entries (
+
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+        unit_id INTEGER,
+
+        unit_code TEXT,
+
+        course TEXT NOT NULL,
+
+        year INTEGER NOT NULL,
+
+        department TEXT,
+
+        semester INTEGER,
+
+        lecturer_id TEXT,
+
+        day_of_week TEXT NOT NULL,
+
+        start_time TEXT NOT NULL,
+
+        end_time TEXT NOT NULL,
+
+        unit_name TEXT NOT NULL,
+
+        facilitator TEXT,
+
+        venue TEXT NOT NULL,
+
+        status TEXT NOT NULL DEFAULT 'ON',
+
+        created_by TEXT,
+
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+
+    )
+    """)
+
+
+    # =========================================
+    # CAMERAS TABLE (Original Admin "camera
+    # management control", Security Admin
+    # "camera access/configuration within
+    # SmartAccess", Dean "venue camera access" —
+    # docs/PRD.md §8)
+    # =========================================
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS cameras (
+
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+        camera_id TEXT UNIQUE NOT NULL,
+
+        name TEXT NOT NULL,
+
+        camera_type TEXT NOT NULL,
+
+        location TEXT,
+
+        department TEXT,
+
+        source TEXT,
+
+        status TEXT NOT NULL DEFAULT 'OFFLINE',
+
+        enabled BOOLEAN NOT NULL DEFAULT 1,
+
+        created_by TEXT,
+
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+
+    )
+    """)
+
+
+    # =========================================
+    # LECTURERS TABLE (SmartAttendance's "my own
+    # units" lookup, docs/PRD.md §6, Phase 2)
+    # =========================================
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS lecturers (
+
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+        lecturer_id TEXT UNIQUE NOT NULL,
+
+        full_name TEXT NOT NULL,
+
+        department TEXT,
+
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+
+    )
+    """)
+
+
+    # =========================================
+    # WATCHLIST TARGETS TABLE (SmartAccess
+    # "target tracking" — Security Admin dashboard,
+    # docs/PRD.md §8). A target with an embedding_file
+    # is checked by the live recognition pipeline
+    # (recognition_service.IdentityCache, ahead of
+    # students/guests) — every live sighting is
+    # logged to access_logs (person_type='TARGET'),
+    # which is what "tracking" actually means here:
+    # a timestamped, per-entrance sighting history.
+    # =========================================
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS watchlist_targets (
+
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+        target_id TEXT UNIQUE NOT NULL,
+
+        full_name TEXT NOT NULL,
+
+        description TEXT,
+
+        reason TEXT,
+
+        status TEXT NOT NULL DEFAULT 'ACTIVE',
+
+        embedding_file TEXT,
+
+        linked_student_id TEXT,
+
+        created_by TEXT,
+
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+        resolved_by TEXT,
+
+        resolved_at DATETIME
+
+    )
+    """)
+
+
+    # =========================================
+    # INVESTIGATIONS TABLES (SmartAccess case
+    # management — Security Admin dashboard,
+    # docs/PRD.md §8). A case is a lightweight
+    # free-text file, optionally tied to one
+    # watchlist target; investigation_notes is
+    # its append-only timeline.
+    # =========================================
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS investigations (
+
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+        case_id TEXT UNIQUE NOT NULL,
+
+        title TEXT NOT NULL,
+
+        description TEXT,
+
+        target_id TEXT,
+
+        status TEXT NOT NULL DEFAULT 'OPEN',
+
+        severity TEXT NOT NULL DEFAULT 'MEDIUM',
+
+        assigned_to TEXT,
+
+        opened_by TEXT,
+
+        opened_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+        closed_by TEXT,
+
+        closed_at DATETIME
+
+    )
+    """)
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS investigation_notes (
+
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+        case_id TEXT NOT NULL,
+
+        author TEXT,
+
+        note TEXT NOT NULL,
+
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+
+    )
+    """)
+
+
+    # investigation_targets / investigation_unknowns: many-to-many
+    # link rows beyond the single "primary" target_id above — a case
+    # can involve more than one target, and can reference an
+    # unknown_persons sighting directly rather than only through a
+    # confirmed target or free-text note.
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS investigation_targets (
+
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+        case_id TEXT NOT NULL,
+
+        target_id TEXT NOT NULL,
+
+        linked_by TEXT,
+
+        linked_at DATETIME DEFAULT CURRENT_TIMESTAMP
+
+    )
+    """)
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS investigation_unknowns (
+
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+        case_id TEXT NOT NULL,
+
+        unknown_id TEXT NOT NULL,
+
+        linked_by TEXT,
+
+        linked_at DATETIME DEFAULT CURRENT_TIMESTAMP
 
     )
     """)
