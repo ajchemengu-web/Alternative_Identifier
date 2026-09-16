@@ -31,6 +31,11 @@ TARGET_EMBEDDINGS_FOLDER = os.path.join(
     "embeddings"
 )
 
+# Not re-validated against buffalo_s (switched from buffalo_l for free-tier
+# hosting RAM limits — see render.yaml/chat) — buffalo_s's weaker
+# recognition backbone produces a different genuine/impostor score
+# distribution, so this threshold may now be too strict or too loose.
+# Re-tune against real enrollment data once there is any.
 MATCH_THRESHOLD = 0.50
 
 CACHE_REFRESH_INTERVAL = 10
@@ -43,7 +48,7 @@ CACHE_REFRESH_INTERVAL = 10
 print("Loading Face Recognition AI...")
 
 app = FaceAnalysis(
-    name="buffalo_l",
+    name="buffalo_s",
     providers=["CPUExecutionProvider"]
 )
 

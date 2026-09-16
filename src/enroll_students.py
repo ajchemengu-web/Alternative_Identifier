@@ -24,7 +24,7 @@ os.makedirs(EMBEDDINGS_FOLDER, exist_ok=True)
 print("Loading face recognition model...")
 
 app = FaceAnalysis(
-    name="buffalo_l",
+    name="buffalo_s",
     providers=["CPUExecutionProvider"]
 )
 

@@ -3,7 +3,7 @@ from insightface.app import FaceAnalysis
 print("Loading AI model...")
 
 app = FaceAnalysis(
-    name="buffalo_l",
+    name="buffalo_s",
     providers=["CPUExecutionProvider"]
 )
 

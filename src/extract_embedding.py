@@ -6,7 +6,7 @@ print("Loading AI model...")
 
 # Initialize InsightFace
 app = FaceAnalysis(
-    name="buffalo_l",
+    name="buffalo_s",
     providers=["CPUExecutionProvider"]
 )
 

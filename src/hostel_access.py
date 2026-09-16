@@ -110,7 +110,7 @@ print(
 print("\nLoading AI recognition model...")
 
 app = FaceAnalysis(
-    name="buffalo_l",
+    name="buffalo_s",
     providers=["CPUExecutionProvider"]
 )
 

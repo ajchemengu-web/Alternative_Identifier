@@ -40,6 +40,8 @@ os.makedirs(
 # CONFIGURATION
 # ==========================================
 
+# Not re-validated since recognition_service.py switched from buffalo_l
+# to buffalo_s (free-tier hosting RAM limits) — see the same note there.
 UNKNOWN_MATCH_THRESHOLD = 0.55
 
 
