@@ -6,15 +6,13 @@ import cv2
 import numpy as np
 from insightface.app import FaceAnalysis
 
+from src.db import get_connection as _get_raw_connection
+from src.services.liveness_service import check_liveness
+
 
 # ============================================================
 # PATHS
 # ============================================================
-
-DATABASE_PATH = os.path.join(
-    "data",
-    "smarthostel.db"
-)
 
 STUDENT_EMBEDDINGS_FOLDER = os.path.join(
     "data",
@@ -24,6 +22,12 @@ STUDENT_EMBEDDINGS_FOLDER = os.path.join(
 GUEST_EMBEDDINGS_FOLDER = os.path.join(
     "data",
     "guests",
+    "embeddings"
+)
+
+TARGET_EMBEDDINGS_FOLDER = os.path.join(
+    "data",
+    "watchlist",
     "embeddings"
 )
 
@@ -57,9 +61,7 @@ print("Face Recognition AI ready!")
 
 def get_connection():
 
-    connection = sqlite3.connect(
-        DATABASE_PATH
-    )
+    connection = _get_raw_connection()
 
     connection.row_factory = sqlite3.Row
 
@@ -76,6 +78,7 @@ class IdentityCache:
 
         self.students = []
         self.guests = []
+        self.targets = []
 
         self.last_refresh = 0
 
@@ -291,6 +294,104 @@ class IdentityCache:
 
 
     # ========================================================
+    # LOAD ACTIVE WATCHLIST TARGETS
+    # ========================================================
+
+    def load_active_targets(self):
+
+        targets = []
+
+        connection = get_connection()
+        cursor = connection.cursor()
+
+        try:
+
+            cursor.execute("""
+                SELECT
+                    target_id,
+                    full_name,
+                    reason,
+                    embedding_file
+                FROM watchlist_targets
+                WHERE status = 'ACTIVE'
+                  AND embedding_file IS NOT NULL
+            """)
+
+            rows = cursor.fetchall()
+
+        except sqlite3.OperationalError as error:
+
+            # IdentityCache is built eagerly at import time (unlike
+            # timetable/camera/lecturer services, which only touch
+            # their own tables once their own endpoints are hit), so
+            # a deployment that hasn't yet run
+            # src/upgrade_watchlist_investigations.py must not crash
+            # the whole app on import — it just does no target
+            # tracking until the migration is applied.
+            print(
+                "[IDENTITY CACHE] "
+                f"watchlist_targets unavailable, skipping: {error}"
+            )
+
+            connection.close()
+
+            return targets
+
+        connection.close()
+
+        for target in rows:
+
+            embedding_path = os.path.join(
+                TARGET_EMBEDDINGS_FOLDER,
+                target["embedding_file"]
+            )
+
+            if not os.path.exists(embedding_path):
+
+                print(
+                    "[IDENTITY CACHE] "
+                    f"Target embedding missing: "
+                    f"{embedding_path}"
+                )
+
+                continue
+
+            try:
+
+                embedding = np.load(embedding_path)
+
+                embedding = embedding.astype(np.float32)
+
+                norm = np.linalg.norm(embedding)
+
+                if norm == 0:
+
+                    continue
+
+                embedding = embedding / norm
+
+                targets.append({
+
+                    "target_id": target["target_id"],
+
+                    "full_name": target["full_name"],
+
+                    "reason": target["reason"],
+
+                    "embedding": embedding
+                })
+
+            except Exception as error:
+
+                print(
+                    "[IDENTITY CACHE] "
+                    f"Target embedding error: {error}"
+                )
+
+        return targets
+
+
+    # ========================================================
     # REFRESH CACHE
     # ========================================================
 
@@ -309,6 +410,10 @@ class IdentityCache:
             self.load_active_guests()
         )
 
+        self.targets = (
+            self.load_active_targets()
+        )
+
         self.last_refresh = (
             __import__("time").time()
         )
@@ -323,6 +428,12 @@ class IdentityCache:
             "[IDENTITY CACHE] "
             f"Guests loaded: "
             f"{len(self.guests)}"
+        )
+
+        print(
+            "[IDENTITY CACHE] "
+            f"Targets loaded: "
+            f"{len(self.targets)}"
         )
 
 
@@ -421,6 +532,41 @@ def recognize_embedding(face_embedding):
 
 
     # ========================================================
+    # WATCHLIST TARGETS — checked first, ahead of students/
+    # guests: a target flag is a security override, so it must
+    # win even when the same face also matches a legitimate
+    # student/guest record (docs/PRD.md §8's SmartAccess "target
+    # tracking" — see watchlist_service.py).
+    # ========================================================
+
+    target_match, target_score = (
+        find_best_match(
+            embedding,
+            identity_cache.targets
+        )
+    )
+
+    if target_match is not None:
+
+        return {
+
+            "status": "TARGET_MATCH",
+
+            "target_id":
+                target_match["target_id"],
+
+            "full_name":
+                target_match["full_name"],
+
+            "reason":
+                target_match["reason"],
+
+            "recognition_score":
+                float(target_score)
+        }
+
+
+    # ========================================================
     # STUDENTS
     # ========================================================
 
@@ -501,10 +647,41 @@ def recognize_embedding(face_embedding):
             float(
                 max(
                     student_score,
-                    guest_score
+                    guest_score,
+                    target_score
                 )
             )
     }
+
+
+# ============================================================
+# RECOGNIZE ONE DETECTED FACE (IDENTITY + LIVENESS)
+# ============================================================
+#
+# Single entry point for turning a detected face into a full
+# recognition result. Every caller that matches a face against an
+# identity — the single-image /recognize endpoint, the multi-camera
+# pipeline, and the tracked live-camera service — should call this
+# instead of recognize_embedding() directly, so the liveness check
+# in §6.1/§13 of docs/PRD.md is enforced everywhere a face is
+# matched, not just at one call site.
+
+def recognize_face(frame, face):
+
+    liveness = check_liveness(frame, face)
+
+    result = recognize_embedding(
+        face.embedding
+    )
+
+    result["is_live"] = liveness["is_live"]
+    result["liveness_score"] = liveness["liveness_score"]
+
+    if liveness["reasons"]:
+
+        result["liveness_reasons"] = liveness["reasons"]
+
+    return result
 
 
 # ============================================================
@@ -531,6 +708,7 @@ def recognize_image(image):
 
     face = faces[0]
 
-    return recognize_embedding(
-        face.embedding
+    return recognize_face(
+        image,
+        face
     )

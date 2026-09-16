@@ -48,9 +48,100 @@ def should_log(identifier):
 # PROCESS ACCESS DECISION
 # ==========================================
 
-def process_access(recognition_result, image=None):
+def process_access(recognition_result, image=None, entrance="Nyayo Main Gate"):
 
     status = recognition_result.get("status")
+
+
+    # ======================================
+    # WATCHLIST TARGET MATCH (docs/PRD.md §8's
+    # SmartAccess "target tracking" —
+    # watchlist_service.py)
+    # ======================================
+
+    if status == "TARGET_MATCH":
+
+        target_id = recognition_result["target_id"]
+
+        score = recognition_result.get(
+            "recognition_score"
+        )
+
+        liveness_score = recognition_result.get(
+            "liveness_score"
+        )
+
+
+        if not recognition_result.get("is_live", True):
+
+            log_access(
+                person_type="TARGET",
+                person_identifier=target_id,
+                entrance=entrance,
+                recognition_score=score,
+                decision="LIVENESS_FAILED",
+                liveness_score=liveness_score
+            )
+
+            return {
+
+                "access_status": "REVIEW_REQUIRED",
+
+                "person_type": "SUSPECTED_SPOOF",
+
+                "message": (
+                    "Face matched an active watchlist target, but "
+                    "failed the liveness check. Logged for review."
+                ),
+
+                "target_id": target_id,
+
+                "recognition_score": score,
+
+                "liveness_score": liveness_score,
+
+                "liveness_reasons": recognition_result.get(
+                    "liveness_reasons",
+                    []
+                )
+            }
+
+
+        # No should_log() cooldown here, unlike STUDENT/GUEST below —
+        # every live sighting of an active target is logged, since
+        # that per-entrance, per-timestamp history is what "tracking"
+        # a target means (watchlist_service.get_sightings()).
+
+        log_access(
+            person_type="TARGET",
+            person_identifier=target_id,
+            entrance=entrance,
+            recognition_score=score,
+            decision="TARGET_ALERT",
+            liveness_score=liveness_score
+        )
+
+        return {
+
+            "access_status": "DENIED",
+
+            "person_type": "TARGET_ALERT",
+
+            "message": (
+                "Face matched an active watchlist target. Access "
+                "denied; logged for immediate security review."
+            ),
+
+            "target_id": target_id,
+
+            "full_name": recognition_result.get("full_name"),
+
+            "reason": recognition_result.get("reason"),
+
+            "recognition_score": score,
+
+            "liveness_score": liveness_score
+        }
 
 
     # ======================================
@@ -65,15 +156,70 @@ def process_access(recognition_result, image=None):
             "recognition_score"
         )
 
+        liveness_score = recognition_result.get(
+            "liveness_score"
+        )
+
+
+        # Auto-admit only applies to a live face (docs/PRD.md §6.1,
+        # §13). A matched identity that fails the liveness check is
+        # routed to the guard instead of being auto-admitted.
+
+        if not recognition_result.get("is_live", True):
+
+            if should_log(student_id):
+
+                log_access(
+                    person_type="STUDENT",
+                    person_identifier=student_id,
+                    entrance=entrance,
+                    recognition_score=score,
+                    decision="LIVENESS_FAILED",
+                    liveness_score=liveness_score
+                )
+
+            return {
+
+                "access_status": "REVIEW_REQUIRED",
+
+                "person_type": "SUSPECTED_SPOOF",
+
+                "message": (
+                    "Face matched a verified student, but failed "
+                    "the liveness check. Routed to guard review "
+                    "instead of auto-admit."
+                ),
+
+                "claimed_identity": {
+                    "full_name": recognition_result[
+                        "full_name"
+                    ],
+
+                    "admission_number": recognition_result[
+                        "admission_number"
+                    ]
+                },
+
+                "recognition_score": score,
+
+                "liveness_score": liveness_score,
+
+                "liveness_reasons": recognition_result.get(
+                    "liveness_reasons",
+                    []
+                )
+            }
+
 
         if should_log(student_id):
 
             log_access(
                 person_type="STUDENT",
                 person_identifier=student_id,
-                entrance="Nyayo Main Gate",
+                entrance=entrance,
                 recognition_score=score,
-                decision="VERIFIED"
+                decision="VERIFIED",
+                liveness_score=liveness_score
             )
 
 
@@ -103,7 +249,9 @@ def process_access(recognition_result, image=None):
                 ]
             },
 
-            "recognition_score": score
+            "recognition_score": score,
+
+            "liveness_score": liveness_score
         }
 
 
@@ -119,15 +267,58 @@ def process_access(recognition_result, image=None):
             "recognition_score"
         )
 
+        liveness_score = recognition_result.get(
+            "liveness_score"
+        )
+
+
+        if not recognition_result.get("is_live", True):
+
+            if should_log(guest_id):
+
+                log_access(
+                    person_type="GUEST",
+                    person_identifier=guest_id,
+                    entrance=entrance,
+                    recognition_score=score,
+                    decision="LIVENESS_FAILED",
+                    liveness_score=liveness_score
+                )
+
+            return {
+
+                "access_status": "REVIEW_REQUIRED",
+
+                "person_type": "SUSPECTED_SPOOF",
+
+                "message": (
+                    "Face matched a previously admitted guest, but "
+                    "failed the liveness check. Routed to guard "
+                    "review instead of auto-admit."
+                ),
+
+                "guest_id": guest_id,
+
+                "recognition_score": score,
+
+                "liveness_score": liveness_score,
+
+                "liveness_reasons": recognition_result.get(
+                    "liveness_reasons",
+                    []
+                )
+            }
+
 
         if should_log(guest_id):
 
             log_access(
                 person_type="GUEST",
                 person_identifier=guest_id,
-                entrance="Nyayo Main Gate",
+                entrance=entrance,
                 recognition_score=score,
-                decision="AG_VALID"
+                decision="AG_VALID",
+                liveness_score=liveness_score
             )
 
 
@@ -145,7 +336,9 @@ def process_access(recognition_result, image=None):
                 "expires_at"
             ],
 
-            "recognition_score": score
+            "recognition_score": score,
+
+            "liveness_score": liveness_score
         }
 
 
