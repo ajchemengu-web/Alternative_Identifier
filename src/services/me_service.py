@@ -52,7 +52,8 @@ def get_my_student_profile(username):
             department,
             course,
             year,
-            semester
+            semester,
+            embedding_file
         FROM students
         WHERE student_id = ?
     """, (
@@ -63,7 +64,15 @@ def get_my_student_profile(username):
 
     connection.close()
 
-    return dict(student_row) if student_row is not None else None
+    if student_row is None:
+
+        return None
+
+    profile = dict(student_row)
+
+    profile["face_enrolled"] = profile.pop("embedding_file") is not None
+
+    return profile
 
 
 def get_my_lecturer_profile(username):

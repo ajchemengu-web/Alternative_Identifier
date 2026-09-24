@@ -69,8 +69,18 @@ def _create_schema(path):
             course TEXT,
             year INTEGER,
             semester INTEGER,
-            embedding_file TEXT NOT NULL,
+            embedding_file TEXT,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+    # Only what enroll_own_face's linked_person_id lookup needs — not
+    # the real users table's full schema.
+    connection.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL,
+            linked_person_id TEXT
         )
     """)
 
@@ -223,6 +233,110 @@ if __name__ == "__main__":
     assert classified_result["year"] == 2
     assert classified_result["semester"] == 1
     print("department/course/year/semester stored when supplied ->", classified_result)
+
+    # ------------------------------------------------------------
+    # create_student_record: a bare record, no embedding yet
+    # ------------------------------------------------------------
+
+    bare = enrollment_service.create_student_record(
+        student_id="STU-200",
+        full_name="Dan Bare",
+        admission_number="ADM-200",
+        hostel="Nyayo",
+        room="B1"
+    )
+
+    assert bare["face_enrolled"] is False
+
+    connection = sqlite3.connect(temp_db_path)
+    row = connection.execute(
+        "SELECT embedding_file FROM students WHERE student_id = ?",
+        ("STU-200",)
+    ).fetchone()
+    connection.close()
+    assert row[0] is None
+    print("create_student_record leaves embedding_file NULL ->", bare)
+
+    try:
+        enrollment_service.create_student_record(
+            student_id="STU-200",
+            full_name="Dan Duplicate",
+            admission_number="ADM-201",
+            hostel="Nyayo",
+            room="B2"
+        )
+        raise AssertionError("Expected ValueError for duplicate student_id")
+    except ValueError as error:
+        print("create_student_record rejects duplicate student_id:", error)
+
+    # ------------------------------------------------------------
+    # enroll_own_face: liveness check is always run — stub it so this
+    # test controls pass/fail deterministically rather than depending
+    # on real liveness_service heuristics against a fake blank image.
+    # ------------------------------------------------------------
+
+    def _link_user(username, student_id):
+        connection = sqlite3.connect(temp_db_path)
+        connection.execute(
+            "INSERT INTO users (username, linked_person_id) VALUES (?, ?)",
+            (username, student_id)
+        )
+        connection.commit()
+        connection.close()
+
+    _link_user("dan.bare", "STU-200")
+
+    enrollment_service.check_liveness = (
+        lambda image, face: {
+            "is_live": True,
+            "liveness_score": 0.9,
+            "reasons": []
+        }
+    )
+
+    _queue_faces([_FakeFace([0.2, 0.3, 0.4])])
+
+    self_result = enrollment_service.enroll_own_face(
+        "dan.bare",
+        [blank_image]
+    )
+
+    assert self_result["student_id"] == "STU-200"
+    assert self_result["samples_used"] == 1
+    assert os.path.exists(
+        os.path.join(temp_embeddings_dir, "STU-200.npy")
+    )
+    print("enroll_own_face (liveness passes) ->", self_result)
+
+    # No linked profile at all -> rejected
+    try:
+        enrollment_service.enroll_own_face("no.such.user", [blank_image])
+        raise AssertionError("Expected ValueError for no linked profile")
+    except ValueError as error:
+        print("enroll_own_face rejects an unlinked account:", error)
+
+    # Linked, but the student record doesn't exist yet -> rejected
+    _link_user("ghost.student", "STU-DOES-NOT-EXIST")
+    try:
+        enrollment_service.enroll_own_face("ghost.student", [blank_image])
+        raise AssertionError("Expected ValueError for missing student record")
+    except ValueError as error:
+        print("enroll_own_face rejects a not-yet-registered student:", error)
+
+    # Liveness fails on every photo -> rejected, nothing written
+    enrollment_service.check_liveness = (
+        lambda image, face: {
+            "is_live": False,
+            "liveness_score": 0.1,
+            "reasons": ["texture_out_of_expected_range"]
+        }
+    )
+    _queue_faces([_FakeFace([0.1, 0.1, 0.1])])
+    try:
+        enrollment_service.enroll_own_face("dan.bare", [blank_image])
+        raise AssertionError("Expected ValueError for failed liveness check")
+    except ValueError as error:
+        print("enroll_own_face rejects a failed liveness check:", error)
 
     import shutil
     shutil.rmtree(temp_dir)

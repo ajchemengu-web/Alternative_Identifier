@@ -29,9 +29,14 @@ create table if not exists students (
     course text,
     year integer,
     semester integer,
-    embedding_file text not null,
+    embedding_file text,
     created_at timestamptz not null default now()
 );
+
+-- A student record can now exist before a face is enrolled (an
+-- admin registers the record; the student later self-enrolls their
+-- own face) — safe to run even if already nullable.
+alter table students alter column embedding_file drop not null;
 
 create index if not exists students_department_idx
     on students (department);

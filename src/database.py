@@ -51,7 +51,7 @@ def initialize_database():
 
         semester INTEGER,
 
-        embedding_file TEXT NOT NULL,
+        embedding_file TEXT,
 
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 

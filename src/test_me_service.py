@@ -133,6 +133,8 @@ if __name__ == "__main__":
     assert profile["course"] == "BSc Computer Science"
     assert profile["year"] == 2
     assert profile["semester"] == 1
+    assert profile["face_enrolled"] is True
+    assert "embedding_file" not in profile
     print("Linked student profile resolved ->", profile)
 
     # ------------------------------------------------------------

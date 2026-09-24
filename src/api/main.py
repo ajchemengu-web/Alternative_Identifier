@@ -163,7 +163,8 @@ def get_students(
                 department,
                 course,
                 year,
-                semester
+                semester,
+                embedding_file
             FROM students
             WHERE department = ?
         """, (department,))
@@ -180,7 +181,8 @@ def get_students(
                 department,
                 course,
                 year,
-                semester
+                semester,
+                embedding_file
             FROM students
         """)
 
@@ -189,9 +191,65 @@ def get_students(
     connection.close()
 
     return [
-        dict(student)
+        {
+            **dict(student),
+            "face_enrolled": student["embedding_file"] is not None
+        }
         for student in students
     ]
+
+
+# ==========================================
+# REGISTER A STUDENT RECORD (docs/PRD.md §5)
+# ==========================================
+#
+# Creates the record only — no embedding yet. Distinct from
+# POST /enroll/student-face below, which requires an existing record
+# (created here) and attaches a photo-derived embedding to it,
+# either by an admin (that endpoint) or by the student themselves
+# (POST /me/enroll-face).
+
+class StudentRecordRequest(BaseModel):
+
+    student_id: str
+    full_name: str
+    admission_number: str
+    hostel: str
+    room: str
+    department: Optional[str] = None
+    course: Optional[str] = None
+    year: Optional[int] = None
+    semester: Optional[int] = None
+
+
+@app.post("/students")
+def create_student(
+    request: StudentRecordRequest,
+    current_user: dict = Depends(require_roles("ADMIN"))
+):
+
+    try:
+
+        result = enrollment_service.create_student_record(
+            student_id=request.student_id,
+            full_name=request.full_name,
+            admission_number=request.admission_number,
+            hostel=request.hostel,
+            room=request.room,
+            department=request.department,
+            course=request.course,
+            year=request.year,
+            semester=request.semester
+        )
+
+    except ValueError as error:
+
+        raise HTTPException(
+            status_code=400,
+            detail=str(error)
+        )
+
+    return result
 
 
 # ==========================================
@@ -1141,6 +1199,68 @@ def get_me(
         )
 
     return {**profile, "role": current_user["role"]}
+
+
+# ==========================================
+# SELF-SERVICE FACIAL ENROLLMENT (docs/PRD.md §5)
+# ==========================================
+#
+# A STUDENT enrolling their own face, from their own logged-in
+# session — the SmartAttendance app's counterpart to the admin-run
+# POST /enroll/student-face above. Requires the student's record to
+# already exist (an admin creates it via POST /students; no
+# self-registration, docs/PRD.md §9) and every candidate photo to
+# pass the liveness check (enrollment_service.py's
+# _live_embedding_from_image) — there's no admin present to catch a
+# spoofed photo the way there is for admin-run enrollment.
+
+@app.post("/me/enroll-face")
+async def enroll_my_face_endpoint(
+    files: List[UploadFile] = File(...),
+    current_user: dict = Depends(require_roles("STUDENT"))
+):
+
+    images = []
+
+    for file in files:
+
+        if not file.content_type.startswith("image/"):
+
+            raise HTTPException(
+                status_code=400,
+                detail=f"{file.filename} is not an image file."
+            )
+
+        image_bytes = await file.read()
+
+        image_array = np.frombuffer(image_bytes, np.uint8)
+
+        image = cv2.imdecode(image_array, cv2.IMREAD_COLOR)
+
+        if image is None:
+
+            raise HTTPException(
+                status_code=400,
+                detail=f"Could not decode {file.filename}."
+            )
+
+        images.append(image)
+
+    try:
+
+        result = enrollment_service.enroll_own_face(
+            current_user["username"],
+            images
+        )
+
+    except ValueError as error:
+
+        raise HTTPException(
+            status_code=400,
+            detail=str(error)
+        )
+
+    return result
 
 
 # ==========================================
