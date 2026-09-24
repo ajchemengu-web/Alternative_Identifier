@@ -88,11 +88,35 @@ python -m src.test_recognition_service   # example
 
 ## Deployment
 
-Blueprint at [`render.yaml`](render.yaml) targets Render.com. **Render's
-free tier (512MB RAM) OOMs** loading the InsightFace model, even on the
-smaller `buffalo_s` pack — a paid tier (Standard, 2GB+) is required, or run
-the engine locally/on your own hardware pointed at the shared Supabase
-database via `DATABASE_URL`.
+Blueprint at [`render.yaml`](render.yaml) targets Render.com, on the
+`standard` plan (2GB RAM) — **Render's free tier (512MB) OOMs** loading
+the InsightFace model, even on the smaller `buffalo_s` pack, so the
+blueprint no longer offers that as an option. Python version is pinned via
+[`.python-version`](.python-version) (Render's native Python runtime reads
+this file directly — an env var does *not* control it), matching the
+Python 3.11 requirement above.
+
+To deploy: in the Render dashboard, **New → Blueprint**, connect this
+repo, and it picks up `render.yaml` automatically. It'll prompt for the
+two secrets marked `sync: false`:
+
+- `DATABASE_URL` — the same Supabase Postgres connection string from
+  local setup, so the deployed engine and the web dashboards read/write
+  the same data instead of each running against their own SQLite file.
+- `JWT_SECRET` — a real value (`openssl rand -base64 32`), not the
+  insecure dev-only fallback.
+
+Once it's live, Render gives it a stable `https://<service>.onrender.com`
+URL — replace whatever `ngrok` tunnel URL is currently set as
+`API_BASE_URL` in `smart-gen.com`'s Vercel project and in
+`smart-attendance-app`'s `API_BASE_URL` (the GitHub Actions repo variable
+for its GitHub Pages/APK builds, and the Vercel project's environment
+variable for its web build) with this one. Unlike `ngrok`, it doesn't
+require a tunnel process running on anyone's laptop, and doesn't change
+URL every time that process restarts.
+
+Running the engine locally/on your own hardware instead, pointed at the
+same shared Supabase database via `DATABASE_URL`, remains an option too.
 
 ## Hardware
 
