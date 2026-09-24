@@ -2,6 +2,7 @@ import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, UploadFile, File, Form, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional
 import numpy as np
@@ -78,6 +79,22 @@ app = FastAPI(
     description="AI-powered hostel access management system",
     version="1.0.0",
     lifespan=lifespan
+)
+
+
+# smart-gen.com (Next.js) never hits this from the browser — every
+# call there is server-side (src/lib/api.ts), invisible to CORS. The
+# SmartAttendance Flutter app running as *web* is the one caller that
+# does call this API directly from a browser, from whatever localhost
+# port `flutter run -d chrome` picks each time — so this is permissive
+# by necessity, not by accident. Safe regardless: nothing here relies
+# on cookies (auth is a Bearer access_token the client attaches
+# itself), so there's no credentialed cross-origin session to leak.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
