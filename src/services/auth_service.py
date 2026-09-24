@@ -179,7 +179,7 @@ def resolve_dashboard(role, admin_tier=None):
 # VALIDATION
 # ============================================================
 
-def _validate_role_and_tier(role, admin_tier):
+def _validate_role_and_tier(role, admin_tier, location):
 
     if role not in ROLES:
 
@@ -201,6 +201,21 @@ def _validate_role_and_tier(role, admin_tier):
             "admin_tier only applies to role=ADMIN"
         )
 
+    if role == "GUARD":
+
+        if not location:
+
+            raise ValueError(
+                "GUARD accounts require a location — which "
+                "checkpoint they're posted at (docs/PRD.md §6.2)"
+            )
+
+    elif location is not None:
+
+        raise ValueError(
+            "location only applies to role=GUARD"
+        )
+
 
 # ============================================================
 # CREATE USER (ENROLLMENT)
@@ -213,10 +228,11 @@ def create_user(
     role,
     admin_tier=None,
     linked_person_id=None,
-    temp_expires_at=None
+    temp_expires_at=None,
+    location=None
 ):
 
-    _validate_role_and_tier(role, admin_tier)
+    _validate_role_and_tier(role, admin_tier, location)
 
     connection = get_connection()
 
@@ -230,9 +246,10 @@ def create_user(
             role,
             admin_tier,
             linked_person_id,
-            temp_expires_at
+            temp_expires_at,
+            location
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         username,
         hash_password(password),
@@ -240,7 +257,8 @@ def create_user(
         role,
         admin_tier,
         linked_person_id,
-        temp_expires_at
+        temp_expires_at,
+        location
     ))
 
     connection.commit()
@@ -264,6 +282,8 @@ def create_user(
         "role": role,
 
         "admin_tier": admin_tier,
+
+        "location": location,
 
         "dashboard": resolve_dashboard(role, admin_tier)
     }
@@ -289,6 +309,7 @@ def authenticate(username, password):
             email,
             role,
             admin_tier,
+            location,
             temp_expires_at,
             is_active
         FROM users
@@ -350,6 +371,8 @@ def authenticate(username, password):
         "role": user["role"],
 
         "admin_tier": user["admin_tier"],
+
+        "location": user["location"],
 
         "dashboard": resolve_dashboard(
             user["role"],

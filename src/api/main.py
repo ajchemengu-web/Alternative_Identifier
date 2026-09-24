@@ -440,6 +440,7 @@ class EnrollRequest(BaseModel):
     role: str
     admin_tier: Optional[str] = None
     linked_person_id: Optional[str] = None
+    location: Optional[str] = None
 
 
 class LoginRequest(BaseModel):
@@ -462,7 +463,8 @@ def enroll(
             email=request.email,
             role=request.role,
             admin_tier=request.admin_tier,
-            linked_person_id=request.linked_person_id
+            linked_person_id=request.linked_person_id,
+            location=request.location
         )
 
     except ValueError as error:

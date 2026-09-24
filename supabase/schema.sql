@@ -69,10 +69,15 @@ create table if not exists users (
     role text not null,
     admin_tier text,
     linked_person_id text,
+    location text,
     temp_expires_at timestamptz,
     is_active boolean not null default true,
     created_at timestamptz not null default now()
 );
+
+-- Covers a project where `users` already existed before this column
+-- was added — `create table if not exists` above is a no-op there.
+alter table users add column if not exists location text;
 
 create table if not exists units (
     id bigint generated always as identity primary key,
