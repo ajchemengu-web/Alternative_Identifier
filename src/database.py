@@ -445,6 +445,89 @@ def initialize_database():
     """)
 
 
+    # =========================================
+    # CLASSROOM ATTENDANCE TABLES (docs/PRD.md
+    # §7.1, Phase 2). One class_sessions row per
+    # calendar occurrence of a recurring
+    # timetable_entries row (day_of_week repeats
+    # weekly; session_date pins one actual date).
+    # attendance_records is the roll itself, one
+    # row per expected student. attendance_notifications
+    # is the "You attended"/"You missed a class"
+    # queue — same queue-not-push pattern
+    # alerts_service.py already uses, since there's
+    # no push/SMS/email infra here either.
+    # =========================================
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS class_sessions (
+
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+        timetable_entry_id INTEGER NOT NULL,
+
+        session_date TEXT NOT NULL,
+
+        status TEXT NOT NULL DEFAULT 'ACTIVE',
+
+        activates_at DATETIME NOT NULL,
+
+        cutoff_at DATETIME NOT NULL,
+
+        submit_at DATETIME NOT NULL,
+
+        submitted_at DATETIME,
+
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+        UNIQUE (timetable_entry_id, session_date)
+
+    )
+    """)
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS attendance_records (
+
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+        class_session_id INTEGER NOT NULL,
+
+        student_id TEXT NOT NULL,
+
+        status TEXT NOT NULL DEFAULT 'ABSENT',
+
+        recognized_at DATETIME,
+
+        recognition_score REAL,
+
+        UNIQUE (class_session_id, student_id)
+
+    )
+    """)
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS attendance_notifications (
+
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+        student_id TEXT NOT NULL,
+
+        class_session_id INTEGER NOT NULL,
+
+        kind TEXT NOT NULL,
+
+        unit_name TEXT NOT NULL,
+
+        facilitator TEXT,
+
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+        read_at DATETIME
+
+    )
+    """)
+
+
     connection.commit()
 
     connection.close()

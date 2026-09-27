@@ -262,6 +262,57 @@ create index if not exists unknown_persons_status_idx on unknown_persons (status
 
 
 -- ============================================================
+-- CLASSROOM ATTENDANCE (docs/PRD.md §7.1, Phase 2)
+-- ============================================================
+--
+-- One class_sessions row per calendar occurrence of a recurring
+-- timetable_entries row (day_of_week repeats weekly; session_date
+-- pins one actual date). attendance_records is the roll itself, one
+-- row per expected student. attendance_notifications is the "You
+-- attended"/"You missed a class" queue — same queue-not-push
+-- pattern access_logs' alert_acknowledged columns already use,
+-- since there's no push/SMS/email infra here either.
+
+create table if not exists class_sessions (
+    id bigint generated always as identity primary key,
+    timetable_entry_id bigint not null,
+    session_date text not null,
+    status text not null default 'ACTIVE',
+    activates_at timestamptz not null,
+    cutoff_at timestamptz not null,
+    submit_at timestamptz not null,
+    submitted_at timestamptz,
+    created_at timestamptz not null default now(),
+    unique (timetable_entry_id, session_date)
+);
+
+create table if not exists attendance_records (
+    id bigint generated always as identity primary key,
+    class_session_id bigint not null,
+    student_id text not null,
+    status text not null default 'ABSENT',
+    recognized_at timestamptz,
+    recognition_score real,
+    unique (class_session_id, student_id)
+);
+
+create table if not exists attendance_notifications (
+    id bigint generated always as identity primary key,
+    student_id text not null,
+    class_session_id bigint not null,
+    kind text not null,
+    unit_name text not null,
+    facilitator text,
+    created_at timestamptz not null default now(),
+    read_at timestamptz
+);
+
+create index if not exists class_sessions_status_idx on class_sessions (status);
+create index if not exists attendance_records_student_idx on attendance_records (student_id);
+create index if not exists attendance_notifications_student_idx on attendance_notifications (student_id, read_at);
+
+
+-- ============================================================
 -- ROW LEVEL SECURITY
 -- ============================================================
 --
@@ -287,3 +338,6 @@ alter table investigations enable row level security;
 alter table investigation_notes enable row level security;
 alter table investigation_targets enable row level security;
 alter table investigation_unknowns enable row level security;
+alter table class_sessions enable row level security;
+alter table attendance_records enable row level security;
+alter table attendance_notifications enable row level security;

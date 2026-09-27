@@ -31,6 +31,7 @@ from src.services import watchlist_service
 from src.services import investigation_service
 from src.services import scene_service
 from src.services import alerts_service
+from src.services import attendance_service
 from src.api.deps import require_admin_tier, require_roles
 
 
@@ -64,14 +65,43 @@ async def _retention_sweep_loop():
         await asyncio.sleep(RETENTION_SWEEP_INTERVAL_SECONDS)
 
 
+# ==========================================
+# ATTENDANCE SWEEP (docs/PRD.md §7.1)
+# ==========================================
+#
+# Same shape as the retention loop above, on a much finer interval:
+# the pipeline's own windows (activate/cutoff/submit) are minute-scale,
+# not hour-scale, so a session needs to be opened/finalized close to
+# on time rather than up to an hour late.
+
+ATTENDANCE_SWEEP_INTERVAL_SECONDS = 60
+
+
+async def _attendance_sweep_loop():
+
+    while True:
+
+        try:
+
+            attendance_service.run_sweep()
+
+        except Exception as error:
+
+            print(f"[attendance] sweep failed: {error}")
+
+        await asyncio.sleep(ATTENDANCE_SWEEP_INTERVAL_SECONDS)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
 
-    task = asyncio.create_task(_retention_sweep_loop())
+    retention_task = asyncio.create_task(_retention_sweep_loop())
+    attendance_task = asyncio.create_task(_attendance_sweep_loop())
 
     yield
 
-    task.cancel()
+    retention_task.cancel()
+    attendance_task.cancel()
 
 
 app = FastAPI(
@@ -455,6 +485,58 @@ async def recognize(
     )
 
     return access_result
+
+
+# ==========================================
+# CLASSROOM ATTENDANCE (docs/PRD.md §7.1, Phase 2)
+# ==========================================
+#
+# A classroom camera's counterpart to /recognize above — deliberately
+# a separate endpoint, not a branch of it: attendance_service.py
+# matches only against a session's expected roster (not the whole
+# membership + watchlist + guests /recognize checks), and only within
+# that session's schedule-derived accept window. Gated ADMIN for now
+# — a real deployment would post from the camera device's own
+# service credential, which doesn't exist in this codebase yet.
+
+@app.post("/attendance/recognize")
+async def recognize_attendance(
+    file: UploadFile = File(...),
+    camera_id: str = Form(...),
+    current_user: dict = Depends(require_roles("ADMIN"))
+):
+
+    if not file.content_type.startswith("image/"):
+
+        raise HTTPException(
+            status_code=400,
+            detail="Please upload an image file."
+        )
+
+    image_bytes = await file.read()
+
+    image_array = np.frombuffer(image_bytes, np.uint8)
+
+    image = cv2.imdecode(image_array, cv2.IMREAD_COLOR)
+
+    if image is None:
+
+        raise HTTPException(
+            status_code=400,
+            detail="Could not decode image."
+        )
+
+    session = attendance_service.get_active_session_for_camera(camera_id)
+
+    if session is None:
+
+        raise HTTPException(
+            status_code=404,
+            detail="No class is currently accepting attendance for this camera."
+        )
+
+    return attendance_service.record_attendance(session["id"], image)
+
 
 @app.get("/guard/pending")
 
@@ -1264,6 +1346,121 @@ async def enroll_my_face_endpoint(
 
 
 # ==========================================
+# MY ATTENDANCE (docs/PRD.md §7.3's student
+# History/Alerts tabs — data source only, no
+# frontend wired up in this pass)
+# ==========================================
+
+@app.get("/me/attendance")
+def get_my_attendance(
+    current_user: dict = Depends(require_roles("STUDENT"))
+):
+
+    profile = me_service.get_my_student_profile(current_user["username"])
+
+    if profile is None:
+
+        raise HTTPException(
+            status_code=404,
+            detail="No linked student profile found for this account"
+        )
+
+    connection = get_connection()
+
+    cursor = connection.cursor()
+
+    cursor.execute(
+        "SELECT ar.status, ar.recognized_at, cs.session_date, "
+        "te.unit_name, te.facilitator, te.start_time, te.end_time "
+        "FROM attendance_records ar "
+        "JOIN class_sessions cs ON cs.id = ar.class_session_id "
+        "JOIN timetable_entries te ON te.id = cs.timetable_entry_id "
+        "WHERE ar.student_id = ? "
+        "ORDER BY cs.session_date DESC, te.start_time DESC",
+        (profile["student_id"],)
+    )
+
+    records = [dict(row) for row in cursor.fetchall()]
+
+    connection.close()
+
+    return records
+
+
+@app.get("/me/notifications")
+def get_my_notifications(
+    current_user: dict = Depends(require_roles("STUDENT"))
+):
+
+    profile = me_service.get_my_student_profile(current_user["username"])
+
+    if profile is None:
+
+        raise HTTPException(
+            status_code=404,
+            detail="No linked student profile found for this account"
+        )
+
+    connection = get_connection()
+
+    cursor = connection.cursor()
+
+    cursor.execute(
+        "SELECT * FROM attendance_notifications "
+        "WHERE student_id = ? "
+        "ORDER BY (read_at IS NOT NULL), created_at DESC",
+        (profile["student_id"],)
+    )
+
+    notifications = [dict(row) for row in cursor.fetchall()]
+
+    connection.close()
+
+    return notifications
+
+
+@app.patch("/me/notifications/{notification_id}/read")
+def mark_notification_read(
+    notification_id: int,
+    current_user: dict = Depends(require_roles("STUDENT"))
+):
+
+    profile = me_service.get_my_student_profile(current_user["username"])
+
+    if profile is None:
+
+        raise HTTPException(
+            status_code=404,
+            detail="No linked student profile found for this account"
+        )
+
+    connection = get_connection()
+
+    cursor = connection.cursor()
+
+    cursor.execute(
+        "UPDATE attendance_notifications SET read_at = ? "
+        "WHERE id = ? AND student_id = ? AND read_at IS NULL",
+        (datetime.now().isoformat(), notification_id, profile["student_id"])
+    )
+
+    connection.commit()
+
+    updated = cursor.rowcount > 0
+
+    connection.close()
+
+    if not updated:
+
+        raise HTTPException(
+            status_code=404,
+            detail="Notification not found, not yours, or already read."
+        )
+
+    return {"status": "ok"}
+
+
+# ==========================================
 # LECTURER PROFILES (docs/PRD.md §5, §6)
 # ==========================================
 #
@@ -1313,6 +1510,61 @@ def create_lecturer(
 
 
 # ==========================================
+# LECTURER ATTENDANCE (docs/PRD.md §7.2's "class
+# attendance PDF" in the History tab — this is
+# the JSON data source; PDF formatting and any
+# frontend view are out of scope for this pass)
+# ==========================================
+
+@app.get("/lecturers/me/attendance")
+def get_my_taught_attendance(
+    current_user: dict = Depends(require_roles("LECTURER"))
+):
+
+    profile = me_service.get_my_lecturer_profile(current_user["username"])
+
+    if profile is None:
+
+        raise HTTPException(
+            status_code=404,
+            detail="No linked lecturer profile found for this account"
+        )
+
+    connection = get_connection()
+
+    cursor = connection.cursor()
+
+    cursor.execute(
+        "SELECT cs.id AS class_session_id, cs.session_date, cs.status, "
+        "te.unit_name, te.start_time, te.end_time, te.venue "
+        "FROM class_sessions cs "
+        "JOIN timetable_entries te ON te.id = cs.timetable_entry_id "
+        "WHERE te.lecturer_id = ? AND cs.status = 'SUBMITTED' "
+        "ORDER BY cs.session_date DESC, te.start_time DESC",
+        (profile["lecturer_id"],)
+    )
+
+    sessions = [dict(row) for row in cursor.fetchall()]
+
+    for session in sessions:
+
+        cursor.execute(
+            "SELECT ar.student_id, s.full_name, ar.status, ar.recognized_at "
+            "FROM attendance_records ar "
+            "JOIN students s ON s.student_id = ar.student_id "
+            "WHERE ar.class_session_id = ? "
+            "ORDER BY s.full_name",
+            (session["class_session_id"],)
+        )
+
+        session["roll"] = [dict(row) for row in cursor.fetchall()]
+
+    connection.close()
+
+    return sessions
+
+
+# ==========================================
 # DATA RETENTION (docs/PRD.md §9)
 # ==========================================
 #
@@ -1333,6 +1585,24 @@ def run_retention_sweep(
         "purged_guest_ids": purged_guest_ids,
         "count": len(purged_guest_ids)
     }
+
+
+# ==========================================
+# ATTENDANCE SWEEP (docs/PRD.md §7.1)
+# ==========================================
+#
+# The lifespan-managed loop below already runs this on a timer; this
+# lets an Original Admin (or an external cron/test) trigger the same
+# sweep on demand — same shape as /admin/retention/sweep above.
+
+@app.post("/admin/attendance/sweep")
+def run_attendance_sweep(
+    current_user: dict = Depends(
+        require_admin_tier("ORIGINAL")
+    )
+):
+
+    return attendance_service.run_sweep()
 
 
 # ==========================================
