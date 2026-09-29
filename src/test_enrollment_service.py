@@ -97,6 +97,18 @@ def _create_schema(path):
         )
     """)
 
+    connection.execute("""
+        CREATE TABLE IF NOT EXISTS biometric_consents (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            student_id TEXT NOT NULL,
+            notice_version TEXT NOT NULL,
+            channel TEXT NOT NULL,
+            recorded_by TEXT,
+            granted_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            withdrawn_at DATETIME
+        )
+    """)
+
     connection.commit()
     connection.close()
 
@@ -120,6 +132,8 @@ if __name__ == "__main__":
     recognition_service.STUDENT_EMBEDDINGS_FOLDER = temp_embeddings_dir
 
     from src.services import enrollment_service
+    from src.services import consent_service
+    from src.services.consent_service import ConsentRequiredError
     enrollment_service.STUDENT_EMBEDDINGS_FOLDER = temp_embeddings_dir
     os.makedirs(temp_embeddings_dir, exist_ok=True)
 
@@ -132,6 +146,7 @@ if __name__ == "__main__":
     _queue_faces([_FakeFace([1.0, 0.0, 0.0])])
 
     result = enrollment_service.enroll_student_face(
+        consent_confirmed_by="admin1",
         student_id="STU-100",
         full_name="Alice Example",
         admission_number="ADM-100",
@@ -159,6 +174,7 @@ if __name__ == "__main__":
     )
 
     result = enrollment_service.enroll_student_face(
+        consent_confirmed_by="admin1",
         student_id="STU-101",
         full_name="Bob Example",
         admission_number="ADM-101",
@@ -179,6 +195,7 @@ if __name__ == "__main__":
 
     try:
         enrollment_service.enroll_student_face(
+            consent_confirmed_by="admin1",
             student_id="STU-100",
             full_name="Alice Duplicate",
             admission_number="ADM-999",
@@ -196,6 +213,7 @@ if __name__ == "__main__":
 
     try:
         enrollment_service.enroll_student_face(
+            consent_confirmed_by="admin1",
             student_id="STU-102",
             full_name="No Photos",
             admission_number="ADM-102",
@@ -216,6 +234,7 @@ if __name__ == "__main__":
     _queue_faces([_FakeFace([0.5, 0.5, 0.0])])
 
     classified_result = enrollment_service.enroll_student_face(
+        consent_confirmed_by="admin1",
         student_id="STU-103",
         full_name="Carol Classified",
         admission_number="ADM-103",
@@ -294,6 +313,20 @@ if __name__ == "__main__":
         }
     )
 
+    # No consent recorded yet -> refused, and nothing written to disk.
+    _queue_faces([_FakeFace([0.2, 0.3, 0.4])])
+    try:
+        enrollment_service.enroll_own_face("dan.bare", [blank_image])
+        raise AssertionError("Expected ConsentRequiredError without consent")
+    except ConsentRequiredError as error:
+        print("enroll_own_face refuses without consent:", error)
+    assert not os.path.exists(
+        os.path.join(temp_embeddings_dir, "STU-200.npy")
+    )
+    assert len(_NEXT_FACES) == 1  # never even looked at the photo
+
+    consent_service.record_consent("STU-200", consent_service.CHANNEL_SELF)
+
     _queue_faces([_FakeFace([0.2, 0.3, 0.4])])
 
     self_result = enrollment_service.enroll_own_face(
@@ -337,6 +370,122 @@ if __name__ == "__main__":
         raise AssertionError("Expected ValueError for failed liveness check")
     except ValueError as error:
         print("enroll_own_face rejects a failed liveness check:", error)
+
+    # ------------------------------------------------------------
+    # Consent bookkeeping
+    # ------------------------------------------------------------
+
+    def _consent_rows(student_id):
+        connection = sqlite3.connect(temp_db_path)
+        connection.row_factory = sqlite3.Row
+        rows = connection.execute(
+            "SELECT * FROM biometric_consents WHERE student_id = ? "
+            "ORDER BY id", (student_id,)
+        ).fetchall()
+        connection.close()
+        return rows
+
+    # record_consent is idempotent: a second call adds no second row.
+    consent_service.record_consent("STU-200", consent_service.CHANNEL_SELF)
+    assert len(_consent_rows("STU-200")) == 1
+    print("record_consent is idempotent -> ok")
+
+    # Admin-assisted enrollment records who confirmed consent.
+    admin_rows = _consent_rows("STU-100")
+    assert len(admin_rows) == 1
+    assert admin_rows[0]["channel"] == "ADMIN_ASSISTED"
+    assert admin_rows[0]["recorded_by"] == "admin1"
+    print("Admin-run enrollment recorded consent ->", dict(admin_rows[0]))
+
+    # Admin-run enrollment without the confirmation is refused before
+    # anything is computed or written.
+    _queue_faces([_FakeFace([0.9, 0.1, 0.0])])
+    try:
+        enrollment_service.enroll_student_face(
+            student_id="STU-300",
+            full_name="No Consent",
+            admission_number="ADM-300",
+            hostel="Nyayo",
+            room="C1",
+            images=[blank_image]
+        )
+        raise AssertionError("Expected ConsentRequiredError without confirmation")
+    except ConsentRequiredError as error:
+        print("Admin enrollment refuses without confirmation:", error)
+    assert not os.path.exists(os.path.join(temp_embeddings_dir, "STU-300.npy"))
+    connection = sqlite3.connect(temp_db_path)
+    assert connection.execute(
+        "SELECT COUNT(*) FROM students WHERE student_id = 'STU-300'"
+    ).fetchone()[0] == 0
+    connection.close()
+
+    # Consent given against an OLDER notice version doesn't count.
+    connection = sqlite3.connect(temp_db_path)
+    connection.execute(
+        "INSERT INTO biometric_consents (student_id, notice_version, channel) "
+        "VALUES ('STU-OLD', 'ancient-v0', 'SELF')"
+    )
+    connection.commit()
+    connection.close()
+    assert consent_service.has_active_consent("STU-OLD") is False
+    status = consent_service.get_status("STU-OLD")
+    assert status["consent_active"] is False
+    assert status["needs_reconsent"] is True
+    print("A stale notice version is not active consent ->", status)
+
+    assert "STU-200" in consent_service.students_with_active_consent()
+    assert "STU-OLD" not in consent_service.students_with_active_consent()
+
+    # ------------------------------------------------------------
+    # withdraw_own_face_data: real deletion, not just a flag
+    # ------------------------------------------------------------
+
+    template_path = os.path.join(temp_embeddings_dir, "STU-200.npy")
+    assert os.path.exists(template_path)
+
+    withdrawn = enrollment_service.withdraw_own_face_data("dan.bare")
+
+    assert withdrawn["consent_withdrawn"] is True
+    assert withdrawn["face_data_deleted"] is True
+    assert not os.path.exists(template_path)
+
+    connection = sqlite3.connect(temp_db_path)
+    embedding_file = connection.execute(
+        "SELECT embedding_file FROM students WHERE student_id = 'STU-200'"
+    ).fetchone()[0]
+    connection.close()
+    assert embedding_file is None
+    assert consent_service.has_active_consent("STU-200") is False
+    # The audit row is kept, just marked withdrawn.
+    rows = _consent_rows("STU-200")
+    assert len(rows) == 1 and rows[0]["withdrawn_at"] is not None
+    print("Withdrawal deleted the template and cleared the record ->", withdrawn)
+
+    # The deleted template is gone from the live recognition cache too.
+    assert not any(
+        entry["student_id"] == "STU-200"
+        for entry in recognition_service.identity_cache.students
+    )
+    print("Withdrawn student is no longer in the recognition cache -> ok")
+
+    # Withdrawing again is harmless and reports nothing left to do.
+    again = enrollment_service.withdraw_own_face_data("dan.bare")
+    assert again["consent_withdrawn"] is False
+    assert again["face_data_deleted"] is False
+
+    # Re-enrolling after withdrawal needs a fresh consent.
+    _queue_faces([_FakeFace([0.2, 0.3, 0.4])])
+    try:
+        enrollment_service.enroll_own_face("dan.bare", [blank_image])
+        raise AssertionError("Expected ConsentRequiredError after withdrawal")
+    except ConsentRequiredError:
+        print("Re-enrolling after withdrawal requires fresh consent -> ok")
+
+    try:
+        enrollment_service.withdraw_own_face_data("no.such.user")
+        raise AssertionError("Expected ValueError for unlinked account")
+    except ValueError as error:
+        print("withdraw rejects an unlinked account:", error)
 
     import shutil
     shutil.rmtree(temp_dir)

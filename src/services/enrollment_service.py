@@ -6,9 +6,12 @@ import numpy as np
 from src.db import get_connection
 from src.services.recognition_service import (
     app,
+    identity_cache,
     STUDENT_EMBEDDINGS_FOLDER
 )
 from src.services.liveness_service import check_liveness
+from src.services import consent_service
+from src.services.consent_service import ConsentRequiredError
 
 
 # ============================================================
@@ -215,8 +218,21 @@ def enroll_student_face(
     department=None,
     course=None,
     year=None,
-    semester=None
+    semester=None,
+    consent_confirmed_by=None
 ):
+
+    # Admin-run enrollment can't get the student's own click, so it
+    # needs an admin's explicit confirmation that the student agreed
+    # to the current notice (consent_service.get_notice()) — recorded
+    # against that admin's username. Checked before any embedding is
+    # computed or written, so a refusal leaves nothing behind.
+    if not consent_confirmed_by:
+
+        raise ConsentRequiredError(
+            "Confirm the student has consented to facial recognition "
+            "before enrolling their face."
+        )
 
     if not images:
 
@@ -319,6 +335,12 @@ def enroll_student_face(
 
     connection.close()
 
+    consent_service.record_consent(
+        student_id,
+        consent_service.CHANNEL_ADMIN_ASSISTED,
+        recorded_by=consent_confirmed_by
+    )
+
     return {
 
         "student_id": student_id,
@@ -409,6 +431,14 @@ def enroll_own_face(username, images):
             "an admin."
         )
 
+    if not consent_service.has_active_consent(student_id):
+
+        connection.close()
+
+        raise ConsentRequiredError(
+            "Consent is required before your face can be enrolled."
+        )
+
     if not images:
 
         connection.close()
@@ -495,4 +525,107 @@ def enroll_own_face(username, images):
             sum(liveness_scores) / len(liveness_scores)
             if liveness_scores else None
         )
+    }
+
+
+# ============================================================
+# WITHDRAW MY CONSENT (STUDENT, logged in)
+# ============================================================
+#
+# Withdrawal has to actually stop the processing, not just flip a
+# flag: this marks the consent withdrawn, deletes the stored facial
+# template from disk, clears students.embedding_file, and forces the
+# recognition cache to reload so the deleted template can't keep
+# matching for up to CACHE_REFRESH_INTERVAL seconds afterwards. The
+# student's record and past access/attendance rows stay — those
+# aren't biometric data — and they can re-enroll later, which needs
+# a fresh consent.
+
+def withdraw_own_face_data(username):
+
+    connection = get_connection()
+
+    connection.row_factory = sqlite3.Row
+
+    cursor = connection.cursor()
+
+    cursor.execute("""
+        SELECT linked_person_id
+        FROM users
+        WHERE username = ?
+    """, (
+        username,
+    ))
+
+    user_row = cursor.fetchone()
+
+    if user_row is None or user_row["linked_person_id"] is None:
+
+        connection.close()
+
+        raise ValueError(
+            "No linked student profile found for this account."
+        )
+
+    student_id = user_row["linked_person_id"]
+
+    cursor.execute("""
+        SELECT embedding_file
+        FROM students
+        WHERE student_id = ?
+    """, (
+        student_id,
+    ))
+
+    student_row = cursor.fetchone()
+
+    if student_row is None:
+
+        connection.close()
+
+        raise ValueError(
+            "Your student record hasn't been set up yet — contact "
+            "an admin."
+        )
+
+    embedding_file = student_row["embedding_file"]
+
+    template_deleted = False
+
+    if embedding_file:
+
+        embedding_path = os.path.join(
+            STUDENT_EMBEDDINGS_FOLDER,
+            embedding_file
+        )
+
+        if os.path.exists(embedding_path):
+
+            os.remove(embedding_path)
+
+            template_deleted = True
+
+        cursor.execute("""
+            UPDATE students
+            SET embedding_file = NULL
+            WHERE student_id = ?
+        """, (
+            student_id,
+        ))
+
+        connection.commit()
+
+    connection.close()
+
+    consent_withdrawn = consent_service.withdraw_consent(student_id)
+
+    identity_cache.refresh()
+
+    return {
+
+        "student_id": student_id,
+
+        "consent_withdrawn": consent_withdrawn,
+
+        "face_data_deleted": template_deleted
     }

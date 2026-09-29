@@ -56,7 +56,7 @@ def _create_schema(path):
             admission_number TEXT UNIQUE NOT NULL,
             hostel TEXT NOT NULL,
             room TEXT NOT NULL,
-            embedding_file TEXT NOT NULL,
+            embedding_file TEXT,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )
     """)
@@ -236,6 +236,24 @@ if __name__ == "__main__":
         raise AssertionError("Expected ValueError for an unknown admission_number")
     except ValueError as error:
         print("Unknown admission_number raised, as expected:", error)
+
+    # A registered-but-not-enrolled student (embedding_file NULL) can't
+    # seed a target — a clean ValueError, not a TypeError from
+    # os.path.join(folder, None).
+    _conn = sqlite3.connect(temp_db_path)
+    _conn.execute(
+        "INSERT INTO students (student_id, full_name, admission_number, "
+        "hostel, room, embedding_file) "
+        "VALUES ('S-NOFACE', 'No Face', 'ADM-NOFACE', 'Nyayo', 'A1', NULL)"
+    )
+    _conn.commit()
+    _conn.close()
+
+    try:
+        watchlist_service.create_target(admission_number="ADM-NOFACE")
+        raise AssertionError("Expected ValueError for a student with no face")
+    except ValueError as error:
+        print("Student with no face on file raised, as expected:", error)
 
     # ------------------------------------------------------------
     # LIST / FILTER

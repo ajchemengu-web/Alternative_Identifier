@@ -528,6 +528,37 @@ def initialize_database():
     """)
 
 
+    # =========================================
+    # BIOMETRIC CONSENT (facial-template
+    # processing consent, recorded per student
+    # per notice version — see
+    # src/services/consent_service.py). Rows are
+    # append-only history: withdrawing sets
+    # withdrawn_at rather than deleting, so there's
+    # an audit trail of what was agreed and when.
+    # =========================================
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS biometric_consents (
+
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+        student_id TEXT NOT NULL,
+
+        notice_version TEXT NOT NULL,
+
+        channel TEXT NOT NULL,
+
+        recorded_by TEXT,
+
+        granted_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+        withdrawn_at DATETIME
+
+    )
+    """)
+
+
     connection.commit()
 
     connection.close()

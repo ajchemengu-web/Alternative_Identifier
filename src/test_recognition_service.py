@@ -24,7 +24,7 @@ def _create_schema(path):
             admission_number TEXT UNIQUE NOT NULL,
             hostel TEXT NOT NULL,
             room TEXT NOT NULL,
-            embedding_file TEXT NOT NULL,
+            embedding_file TEXT,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )
     """)
@@ -155,6 +155,28 @@ if __name__ == "__main__":
     # students, which take priority over guests; falls through to
     # UNKNOWN when nothing matches
     # ------------------------------------------------------------
+
+    # ------------------------------------------------------------
+    # load_students must skip a student with no face on file
+    # (embedding_file NULL: registered but not enrolled, or consent
+    # withdrawn and the template deleted). Regression: this used to
+    # raise TypeError from os.path.join(folder, None), which broke
+    # every /recognize call at the next cache refresh once any admin
+    # registered a student without a face.
+    # ------------------------------------------------------------
+
+    _conn = sqlite3.connect(temp_db_path)
+    _conn.execute(
+        "INSERT INTO students (student_id, full_name, admission_number, "
+        "hostel, room, embedding_file) "
+        "VALUES ('STU-NOFACE', 'No Face', 'ADM-NOFACE', 'Nyayo', 'A1', NULL)"
+    )
+    _conn.commit()
+    _conn.close()
+
+    loaded = rs.identity_cache.load_students()
+    assert loaded == []
+    print("load_students skips a student with no embedding_file -> ok")
 
     # Directly inject cache contents rather than hitting a real DB —
     # and freeze last_refresh so refresh_if_needed() (10s interval)

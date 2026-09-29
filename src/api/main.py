@@ -19,6 +19,9 @@ from src.services.guard_service import (
 )
 from src.services import auth_service
 from src.services.enrollment_service import enroll_student_face
+from src.services import enrollment_service
+from src.services import consent_service
+from src.services.consent_service import ConsentRequiredError
 from src.services import timetable_service
 from src.services import unit_service
 from src.services import dean_service
@@ -220,10 +223,17 @@ def get_students(
 
     connection.close()
 
+    consented = consent_service.students_with_active_consent()
+
     return [
         {
             **dict(student),
-            "face_enrolled": student["embedding_file"] is not None
+            "face_enrolled": student["embedding_file"] is not None,
+            # A face enrolled before consent recording existed (or
+            # against an older notice version) shows face_enrolled
+            # true and consent_recorded false — a gap an admin can
+            # see and chase, not one that's silently assumed fine.
+            "consent_recorded": student["student_id"] in consented
         }
         for student in students
     ]
@@ -703,6 +713,7 @@ async def enroll_student_face_endpoint(
     course: Optional[str] = None,
     year: Optional[int] = None,
     semester: Optional[int] = None,
+    consent_confirmed: bool = False,
     files: List[UploadFile] = File(...),
     current_user: dict = Depends(require_roles("ADMIN"))
 ):
@@ -745,7 +756,17 @@ async def enroll_student_face_endpoint(
             department=department,
             course=course,
             year=year,
-            semester=semester
+            semester=semester,
+            consent_confirmed_by=(
+                current_user["username"] if consent_confirmed else None
+            )
+        )
+
+    except ConsentRequiredError as error:
+
+        raise HTTPException(
+            status_code=403,
+            detail=str(error)
         )
 
     except ValueError as error:
@@ -1335,6 +1356,13 @@ async def enroll_my_face_endpoint(
             images
         )
 
+    except ConsentRequiredError as error:
+
+        raise HTTPException(
+            status_code=403,
+            detail=str(error)
+        )
+
     except ValueError as error:
 
         raise HTTPException(
@@ -1343,6 +1371,89 @@ async def enroll_my_face_endpoint(
         )
 
     return result
+
+
+# ==========================================
+# BIOMETRIC CONSENT (src/services/consent_service.py)
+# ==========================================
+#
+# GET returns the current notice text and this student's consent
+# status; POST records consent against a specific notice version
+# (409 if the client is holding a stale one, so nobody is recorded as
+# agreeing to text they didn't see); withdraw deletes the facial
+# template as well as recording the withdrawal.
+
+class ConsentRequest(BaseModel):
+
+    notice_version: str
+
+
+def _student_id_for(username):
+
+    profile = me_service.get_my_student_profile(username)
+
+    if profile is None:
+
+        raise HTTPException(
+            status_code=404,
+            detail="No linked student profile found for this account"
+        )
+
+    return profile["student_id"]
+
+
+@app.get("/me/consent")
+def get_my_consent(
+    current_user: dict = Depends(require_roles("STUDENT"))
+):
+
+    student_id = _student_id_for(current_user["username"])
+
+    return {
+        "notice": consent_service.get_notice(),
+        "status": consent_service.get_status(student_id)
+    }
+
+
+@app.post("/me/consent")
+def grant_my_consent(
+    request: ConsentRequest,
+    current_user: dict = Depends(require_roles("STUDENT"))
+):
+
+    student_id = _student_id_for(current_user["username"])
+
+    if request.notice_version != consent_service.NOTICE_VERSION:
+
+        raise HTTPException(
+            status_code=409,
+            detail="The consent notice has changed — please review it again."
+        )
+
+    return consent_service.record_consent(
+        student_id,
+        consent_service.CHANNEL_SELF,
+        recorded_by=current_user["username"]
+    )
+
+
+@app.post("/me/consent/withdraw")
+def withdraw_my_consent(
+    current_user: dict = Depends(require_roles("STUDENT"))
+):
+
+    try:
+
+        return enrollment_service.withdraw_own_face_data(
+            current_user["username"]
+        )
+
+    except ValueError as error:
+
+        raise HTTPException(
+            status_code=400,
+            detail=str(error)
+        )
 
 
 # ==========================================

@@ -110,6 +110,7 @@ class IdentityCache:
                 room,
                 embedding_file
             FROM students
+            WHERE embedding_file IS NOT NULL
         """)
 
         rows = cursor.fetchall()

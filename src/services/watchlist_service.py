@@ -107,6 +107,15 @@ def _copy_student_embedding(target_id, admission_number):
             f"{admission_number}"
         )
 
+    if not student["embedding_file"]:
+
+        # A student record can exist without a face yet (registered but
+        # not enrolled, or consent withdrawn and the template deleted).
+        raise ValueError(
+            "That student has no facial embedding on file (not "
+            "enrolled, or consent withdrawn)."
+        )
+
     source_path = os.path.join(
         STUDENT_EMBEDDINGS_FOLDER,
         student["embedding_file"]

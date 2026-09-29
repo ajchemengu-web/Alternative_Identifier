@@ -307,6 +307,21 @@ create table if not exists attendance_notifications (
     read_at timestamptz
 );
 
+-- Biometric (facial template) processing consent, recorded per student
+-- per notice version. Append-only history: withdrawing sets
+-- withdrawn_at rather than deleting, so there's an audit trail of what
+-- was agreed and when (src/services/consent_service.py).
+create table if not exists biometric_consents (
+    id bigint generated always as identity primary key,
+    student_id text not null,
+    notice_version text not null,
+    channel text not null,
+    recorded_by text,
+    granted_at timestamptz not null default now(),
+    withdrawn_at timestamptz
+);
+
+create index if not exists biometric_consents_student_idx on biometric_consents (student_id, withdrawn_at);
 create index if not exists class_sessions_status_idx on class_sessions (status);
 create index if not exists attendance_records_student_idx on attendance_records (student_id);
 create index if not exists attendance_notifications_student_idx on attendance_notifications (student_id, read_at);
@@ -341,3 +356,4 @@ alter table investigation_unknowns enable row level security;
 alter table class_sessions enable row level security;
 alter table attendance_records enable row level security;
 alter table attendance_notifications enable row level security;
+alter table biometric_consents enable row level security;
