@@ -1408,6 +1408,17 @@ def _student_id_for(username):
     return profile["student_id"]
 
 
+@app.get("/consent/notice")
+def get_consent_notice(
+    current_user: dict = Depends(require_roles("ADMIN", "STUDENT"))
+):
+
+    # Not secret — it's exactly what a person is shown before agreeing.
+    # ADMIN can read it too so an admin enrolling a student's face can
+    # show them the real text rather than paraphrasing it.
+    return consent_service.get_notice()
+
+
 @app.get("/me/consent")
 def get_my_consent(
     current_user: dict = Depends(require_roles("STUDENT"))

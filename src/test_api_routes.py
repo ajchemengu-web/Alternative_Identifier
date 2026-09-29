@@ -188,6 +188,16 @@ if __name__ == "__main__":
     connection.commit()
     connection.close()
 
+    # An admin enrolling a face on someone's behalf can read the real
+    # notice text to show them; anonymous callers can't.
+    notice = client.get("/consent/notice", headers=admin)
+    assert notice.status_code == 200
+    assert notice.json()["version"]
+    assert len(notice.json()["sections"]) >= 4
+    assert client.get("/consent/notice").status_code == 401
+    assert client.get("/consent/notice", headers=student).status_code == 200
+    print("GET /consent/notice readable by admin + student, not anonymous")
+
     # Admin-only and student-only doors stay shut.
     assert client.get("/me/consent", headers=admin).status_code == 403
     assert client.get("/me/consent").status_code == 401
