@@ -702,18 +702,24 @@ def complete_temporary_admin_task(
 # STUDENT role only for now — see the scope note in
 # src/services/enrollment_service.py.
 
+# The fields below are Form(...), not plain parameters: next to a File
+# upload the request is multipart/form-data, and FastAPI reads a plain
+# scalar parameter from the *query string* — so plain ones here would
+# 422 ("field required, in query") against the form fields the web
+# dashboard actually sends.
+
 @app.post("/enroll/student-face")
 async def enroll_student_face_endpoint(
-    student_id: str,
-    full_name: str,
-    admission_number: str,
-    hostel: str,
-    room: str,
-    department: Optional[str] = None,
-    course: Optional[str] = None,
-    year: Optional[int] = None,
-    semester: Optional[int] = None,
-    consent_confirmed: bool = False,
+    student_id: str = Form(...),
+    full_name: str = Form(...),
+    admission_number: str = Form(...),
+    hostel: str = Form(...),
+    room: str = Form(...),
+    department: Optional[str] = Form(None),
+    course: Optional[str] = Form(None),
+    year: Optional[int] = Form(None),
+    semester: Optional[int] = Form(None),
+    consent_confirmed: bool = Form(False),
     files: List[UploadFile] = File(...),
     current_user: dict = Depends(require_roles("ADMIN"))
 ):
@@ -1731,10 +1737,10 @@ def run_attendance_sweep(
 
 @app.post("/watchlist")
 async def create_watchlist_target(
-    full_name: Optional[str] = None,
-    description: Optional[str] = None,
-    reason: Optional[str] = None,
-    admission_number: Optional[str] = None,
+    full_name: Optional[str] = Form(None),
+    description: Optional[str] = Form(None),
+    reason: Optional[str] = Form(None),
+    admission_number: Optional[str] = Form(None),
     images: List[UploadFile] = File(default=[]),
     current_user: dict = Depends(
         require_admin_tier("SECURITY", "ORIGINAL")
