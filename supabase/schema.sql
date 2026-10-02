@@ -335,6 +335,25 @@ create table if not exists data_erasure_log (
     performed_at timestamptz not null default now()
 );
 
+-- Read audit log (src/services/audit_service.py): who viewed personal
+-- data and when. Holds no returned data. Timestamps are UTC ISO text so
+-- they compare the same way on SQLite and Postgres.
+create table if not exists audit_log (
+    id bigint generated always as identity primary key,
+    occurred_at text not null,
+    last_seen_at text not null,
+    times integer not null default 1,
+    username text not null,
+    role text,
+    admin_tier text,
+    department text,
+    action text not null,
+    subject_id text not null default '',
+    params text not null default '{}'
+);
+
+create index if not exists audit_log_user_idx on audit_log (username, occurred_at);
+create index if not exists audit_log_subject_idx on audit_log (subject_id, occurred_at);
 create index if not exists biometric_consents_student_idx on biometric_consents (student_id, withdrawn_at);
 create index if not exists class_sessions_status_idx on class_sessions (status);
 create index if not exists attendance_records_student_idx on attendance_records (student_id);
@@ -372,3 +391,4 @@ alter table attendance_records enable row level security;
 alter table attendance_notifications enable row level security;
 alter table biometric_consents enable row level security;
 alter table data_erasure_log enable row level security;
+alter table audit_log enable row level security;

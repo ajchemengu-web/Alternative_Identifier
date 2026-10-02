@@ -36,8 +36,10 @@ from src.services import investigation_service
 from src.services import scene_service
 from src.services import alerts_service
 from src.services import attendance_service
+from src.services import audit_service
 from src.services import template_store
 from src.api.deps import (
+    audited,
     require_access,
     require_admin_tier,
     require_roles,
@@ -67,6 +69,8 @@ async def _retention_sweep_loop():
         try:
 
             retention_service.purge_expired_guests()
+
+            audit_service.purge_older_than()
 
         except Exception as error:
 
@@ -117,6 +121,10 @@ async def lifespan(app: FastAPI):
     # Refuse to start where face templates would be stored unencrypted
     # by accident (see src/services/template_store.py).
     template_store.require_configured()
+
+    # Likewise refuse to start where reads of personal data could not be
+    # recorded (src/services/audit_service.py).
+    audit_service.require_ready()
 
     retention_task = asyncio.create_task(_retention_sweep_loop())
     attendance_task = asyncio.create_task(_attendance_sweep_loop())
@@ -197,7 +205,12 @@ def health():
 @app.get("/students")
 def get_students(
     department: Optional[str] = None,
-    current_user: dict = Depends(require_admin_tier(*MONITORING_TIERS))
+    current_user: dict = Depends(
+        audited(
+            "students.list",
+            require_admin_tier(*MONITORING_TIERS),
+        )
+    )
 ):
 
     connection = get_connection()
@@ -317,7 +330,14 @@ def create_student(
 # ==========================================
 
 @app.get("/guests")
-def get_guests(current_user: dict = Depends(require_admin_tier(*MONITORING_TIERS))):
+def get_guests(
+    current_user: dict = Depends(
+        audited(
+            "guests.list",
+            require_admin_tier(*MONITORING_TIERS),
+        )
+    )
+):
 
     connection = get_connection()
 
@@ -350,7 +370,12 @@ def get_guests(current_user: dict = Depends(require_admin_tier(*MONITORING_TIERS
 
 @app.get("/access-logs")
 def get_access_logs(
-    current_user: dict = Depends(require_access(roles=("GUARD",), admin_tiers=MONITORING_TIERS))
+    current_user: dict = Depends(
+        audited(
+            "access_logs.list",
+            require_access(roles=("GUARD",), admin_tiers=MONITORING_TIERS),
+        )
+    )
 ):
 
     connection = get_connection()
@@ -571,7 +596,12 @@ async def recognize_attendance(
 @app.get("/guard/pending")
 
 def get_pending_persons(
-    current_user: dict = Depends(require_access(roles=("GUARD",), admin_tiers=MONITORING_TIERS))
+    current_user: dict = Depends(
+        audited(
+            "unknowns.pending",
+            require_access(roles=("GUARD",), admin_tiers=MONITORING_TIERS),
+        )
+    )
 ):
 
     pending = get_pending_unknowns()
@@ -1102,7 +1132,10 @@ def delete_timetable_entry(
 def get_dean_roster(
     department: Optional[str] = None,
     current_user: dict = Depends(
-        require_admin_tier("DEAN", "ORIGINAL")
+        audited(
+            "dean.roster",
+            require_admin_tier("DEAN", "ORIGINAL"),
+        )
     )
 ):
 
@@ -1642,7 +1675,12 @@ class LecturerRequest(BaseModel):
 @app.get("/lecturers")
 def get_lecturers(
     department: Optional[str] = None,
-    current_user: dict = Depends(require_admin_tier("ORIGINAL", "TIMETABLING"))
+    current_user: dict = Depends(
+        audited(
+            "lecturers.list",
+            require_admin_tier("ORIGINAL", "TIMETABLING"),
+        )
+    )
 ):
 
     return lecturer_service.list_lecturers(department)
@@ -1679,7 +1717,12 @@ def create_lecturer(
 
 @app.get("/lecturers/me/attendance")
 def get_my_taught_attendance(
-    current_user: dict = Depends(require_roles("LECTURER"))
+    current_user: dict = Depends(
+        audited(
+            "lecturer.class_rolls",
+            require_roles("LECTURER"),
+        )
+    )
 ):
 
     profile = me_service.get_my_lecturer_profile(current_user["username"])
@@ -1744,8 +1787,53 @@ def run_retention_sweep(
 
     return {
         "purged_guest_ids": purged_guest_ids,
-        "count": len(purged_guest_ids)
+        "count": len(purged_guest_ids),
+        "audit_entries_purged": audit_service.purge_older_than()
     }
+
+
+# ==========================================
+# READ AUDIT LOG (docs/DPIA.md R3)
+# ==========================================
+#
+# Who looked at personal data, and when — see
+# src/services/audit_service.py for exactly what is and isn't recorded.
+# Original Admin only, and looking at it is itself recorded. There is
+# deliberately no endpoint to edit or delete entries.
+
+@app.get("/admin/audit")
+def get_audit_log(
+    username: Optional[str] = None,
+    action: Optional[str] = None,
+    subject: Optional[str] = None,
+    since: Optional[str] = None,
+    until: Optional[str] = None,
+    limit: int = 100,
+    current_user: dict = Depends(
+        audited(
+            "audit.view",
+            require_admin_tier("ORIGINAL"),
+        )
+    )
+):
+
+    try:
+
+        return audit_service.list_entries(
+            username=username,
+            action=action,
+            subject=subject,
+            since=since,
+            until=until,
+            limit=limit
+        )
+
+    except ValueError as error:
+
+        raise HTTPException(
+            status_code=400,
+            detail=str(error)
+        )
 
 
 # ==========================================
@@ -1769,7 +1857,11 @@ class ErasureRequest(BaseModel):
 def get_student_data_summary(
     student_id: str,
     current_user: dict = Depends(
-        require_admin_tier("ORIGINAL")
+        audited(
+            "student.data_summary",
+            require_admin_tier("ORIGINAL"),
+            subject="student_id",
+        )
     )
 ):
 
@@ -1919,7 +2011,10 @@ async def create_watchlist_target(
 def get_watchlist(
     status: Optional[str] = None,
     current_user: dict = Depends(
-        require_admin_tier("SECURITY", "ORIGINAL")
+        audited(
+            "watchlist.list",
+            require_admin_tier("SECURITY", "ORIGINAL"),
+        )
     )
 ):
 
@@ -1930,7 +2025,11 @@ def get_watchlist(
 def get_watchlist_sightings(
     target_id: str,
     current_user: dict = Depends(
-        require_admin_tier("SECURITY", "ORIGINAL")
+        audited(
+            "watchlist.sightings",
+            require_admin_tier("SECURITY", "ORIGINAL"),
+            subject="target_id",
+        )
     )
 ):
 
@@ -1950,7 +2049,11 @@ def get_watchlist_sightings(
 def get_watchlist_frequency(
     target_id: str,
     current_user: dict = Depends(
-        require_admin_tier("SECURITY", "ORIGINAL")
+        audited(
+            "watchlist.frequency",
+            require_admin_tier("SECURITY", "ORIGINAL"),
+            subject="target_id",
+        )
     )
 ):
 
@@ -2108,7 +2211,10 @@ def update_investigation(
 def get_investigations(
     status: Optional[str] = None,
     current_user: dict = Depends(
-        require_admin_tier("SECURITY", "ORIGINAL")
+        audited(
+            "investigations.list",
+            require_admin_tier("SECURITY", "ORIGINAL"),
+        )
     )
 ):
 
@@ -2119,7 +2225,11 @@ def get_investigations(
 def get_investigation(
     case_id: str,
     current_user: dict = Depends(
-        require_admin_tier("SECURITY", "ORIGINAL")
+        audited(
+            "investigations.view",
+            require_admin_tier("SECURITY", "ORIGINAL"),
+            subject="case_id",
+        )
     )
 ):
 
@@ -2320,7 +2430,10 @@ def get_scene_query(
     end_time: Optional[str] = None,
     co_occurrence_minutes: Optional[int] = None,
     current_user: dict = Depends(
-        require_admin_tier("SECURITY", "ORIGINAL")
+        audited(
+            "scene.query",
+            require_admin_tier("SECURITY", "ORIGINAL"),
+        )
     )
 ):
 
@@ -2344,7 +2457,10 @@ def get_scene_query(
 @app.get("/alerts/pending")
 def get_pending_alerts(
     current_user: dict = Depends(
-        require_admin_tier("SECURITY", "ORIGINAL")
+        audited(
+            "alerts.pending",
+            require_admin_tier("SECURITY", "ORIGINAL"),
+        )
     )
 ):
 

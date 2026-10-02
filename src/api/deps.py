@@ -1,5 +1,6 @@
-from fastapi import Depends, Header, HTTPException
+from fastapi import Depends, Header, HTTPException, Request
 
+from src.services import audit_service
 from src.services.auth_service import decode_access_token
 
 
@@ -131,3 +132,49 @@ def scope_department(user, requested=None):
         )
 
     return own
+
+
+def audited(action, access, subject=None):
+
+    """Wraps an access check so every allowed read is recorded.
+
+    `access` is the require_* dependency that decides who may call the
+    endpoint; it runs first, so a refused caller leaves no entry here
+    (and gets their 403 as before). `subject` names the path or query
+    parameter that identifies the record being looked at. If the read
+    can't be recorded it is refused: no unlogged access.
+    """
+
+    def checker(request: Request, user: dict = Depends(access)):
+
+        subject_value = None
+
+        if subject:
+
+            subject_value = (
+                request.path_params.get(subject)
+                or request.query_params.get(subject)
+            )
+
+        try:
+
+            audit_service.record_read(
+                user,
+                action,
+                subject=subject_value,
+                params=dict(request.query_params)
+            )
+
+        except audit_service.AuditUnavailableError:
+
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    "The audit log is unavailable, so this data cannot "
+                    "be shown right now."
+                )
+            )
+
+        return user
+
+    return checker

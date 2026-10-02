@@ -570,6 +570,47 @@ def initialize_database():
     """)
 
 
+    # The read audit log (src/services/audit_service.py): who viewed
+    # personal data, when, and which record — never the data itself.
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS audit_log (
+
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+        occurred_at TEXT NOT NULL,
+
+        last_seen_at TEXT NOT NULL,
+
+        times INTEGER NOT NULL DEFAULT 1,
+
+        username TEXT NOT NULL,
+
+        role TEXT,
+
+        admin_tier TEXT,
+
+        department TEXT,
+
+        action TEXT NOT NULL,
+
+        subject_id TEXT NOT NULL DEFAULT '',
+
+        params TEXT NOT NULL DEFAULT '{}'
+
+    )
+    """)
+
+    cursor.execute("""
+    CREATE INDEX IF NOT EXISTS audit_log_user_idx
+    ON audit_log (username, occurred_at)
+    """)
+
+    cursor.execute("""
+    CREATE INDEX IF NOT EXISTS audit_log_subject_idx
+    ON audit_log (subject_id, occurred_at)
+    """)
+
+
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS biometric_consents (
 

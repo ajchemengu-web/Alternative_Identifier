@@ -82,6 +82,14 @@ def _extra_schema(path):
             erased_by TEXT NOT NULL, summary TEXT NOT NULL,
             performed_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
+        CREATE TABLE IF NOT EXISTS audit_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            occurred_at TEXT NOT NULL, last_seen_at TEXT NOT NULL,
+            times INTEGER NOT NULL DEFAULT 1, username TEXT NOT NULL,
+            role TEXT, admin_tier TEXT, department TEXT,
+            action TEXT NOT NULL, subject_id TEXT NOT NULL DEFAULT '',
+            params TEXT NOT NULL DEFAULT '{}'
+        );
     """)
 
     connection.commit()
@@ -563,6 +571,163 @@ if __name__ == "__main__":
                            headers=admin), "student_id") == {"S-L"}
     print("The Original Admin still sees every department")
 
+    # ------------------------------------------------------------
+    # READ AUDIT LOG, end to end
+    # ------------------------------------------------------------
+
+    def _audit_rows():
+        conn = sqlite3.connect(temp_db_path)
+        conn.row_factory = sqlite3.Row
+        rows = [dict(r) for r in conn.execute(
+            "SELECT * FROM audit_log ORDER BY id")]
+        conn.close()
+        return rows
+
+    def _clear_audit():
+        conn = sqlite3.connect(temp_db_path)
+        conn.execute("DELETE FROM audit_log")
+        conn.commit()
+        conn.close()
+
+    audited_reads = {
+        ("/students", "students.list"),
+        ("/guests", "guests.list"),
+        ("/access-logs", "access_logs.list"),
+        ("/guard/pending", "unknowns.pending"),
+        ("/dean/roster", "dean.roster"),
+        ("/lecturers", "lecturers.list"),
+        ("/lecturers/me/attendance", "lecturer.class_rolls"),
+        ("/admin/students/data-summary?student_id=STU-1",
+         "student.data_summary"),
+        ("/watchlist", "watchlist.list"),
+        ("/watchlist/TGT-9/sightings", "watchlist.sightings"),
+        ("/watchlist/TGT-9/frequency", "watchlist.frequency"),
+        ("/investigations", "investigations.list"),
+        ("/investigations/CASE-9", "investigations.view"),
+        ("/scene/query?location=Main Gate", "scene.query"),
+        ("/alerts/pending", "alerts.pending"),
+        ("/admin/audit", "audit.view"),
+    }
+
+    # Every one of those routes leaves an entry for an allowed caller...
+    for path, action in sorted(audited_reads):
+        who = {"/lecturers/me/attendance": "LECTURER",
+               "/dean/roster": "DEAN",
+               "/lecturers": "TIMETABLING"}.get(path, "ORIGINAL")
+        _clear_audit()
+        status = quiet.get(path, headers=callers[who]).status_code
+        assert status not in (401, 403, 503), (path, status)
+        rows = _audit_rows()
+        assert [r["action"] for r in rows] == [action], (path, rows)
+        expected_user = {"LECTURER": "lecturer-none"}.get(
+            who, f"admin-{who.lower()}")
+        assert rows[0]["username"] == expected_user, rows[0]
+    print(f"{len(audited_reads)} personal-data reads each leave an audit entry")
+
+    # ...and a refused caller leaves none.
+    _clear_audit()
+    for path, _action in sorted(audited_reads):
+        assert quiet.get(path, headers=callers["STUDENT"]).status_code == 403
+        assert quiet.get(path).status_code == 401
+    assert _audit_rows() == []
+    print("Refused callers (wrong role, or no token) leave no entry")
+
+    # What is recorded: who, which record, the filters — not the data.
+    _clear_audit()
+    quiet.get("/watchlist/TGT-9/sightings", headers=callers["SECURITY"])
+    quiet.get("/scene/query?location=Main Gate&token=SECRET",
+              headers=callers["SECURITY"])
+    quiet.get("/dean/roster", headers=callers["DEAN"])
+    sightings, scene, roster = _audit_rows()
+    assert (sightings["username"], sightings["role"],
+            sightings["admin_tier"]) == ("admin-security", "ADMIN", "SECURITY")
+    assert sightings["subject_id"] == "TGT-9"
+    assert "Main Gate" in scene["params"] and "SECRET" not in scene["params"]
+    assert roster["department"] == "School of Business"
+    print("Entries carry the account, the subject, the filters and a Dean's "
+          "department")
+
+    # The polling guard produces one coalesced row.
+    _clear_audit()
+    for _ in range(25):
+        quiet.get("/access-logs", headers=callers["GUARD"])
+    rows = _audit_rows()
+    assert len(rows) == 1 and rows[0]["times"] == 25
+    print("25 identical guard polls -> one row, times=25")
+
+    # Only the Original Admin can read the log, and reading it is logged.
+    for who in everyone - {"ORIGINAL"}:
+        assert quiet.get("/admin/audit", headers=callers[who]).status_code == 403
+    _clear_audit()
+    quiet.get("/students", headers=callers["SECURITY"])
+    seen = client.get("/admin/audit", headers=callers["ORIGINAL"])
+    assert seen.status_code == 200
+    entries = seen.json()
+    # Newest first: this very look at the log is already on it.
+    assert [e["action"] for e in entries] == ["audit.view", "students.list"]
+    assert [e["action"] for e in _audit_rows()] == ["students.list", "audit.view"]
+    assert client.get("/admin/audit?username=admin-security",
+                      headers=callers["ORIGINAL"]).json()[0]["action"] == \
+        "students.list"
+    assert client.get("/admin/audit?since=garbage",
+                      headers=callers["ORIGINAL"]).status_code == 400
+    print("/admin/audit is Original-only, filterable, and itself recorded")
+
+    # There is no way to edit or delete entries over the API.
+    for route in main.app.routes:
+        if getattr(route, "path", "").startswith("/admin/audit"):
+            assert set(route.methods) <= {"GET", "HEAD"}, route.methods
+    print("The audit log has no write endpoints")
+
+    # Drift guard: every GET route is either audited or consciously
+    # listed as not a view into other people's records. A new route has
+    # to be put in one place or the other.
+    not_audited = {
+        "/": "public status", "/health": "public status",
+        "/analytics/summary": "aggregate counts",
+        "/dean/summary": "aggregate counts",
+        "/cameras": "device registry, no personal data",
+        "/units": "course catalogue", "/timetable": "course schedule",
+        "/scene/locations": "list of camera locations",
+        "/me": "own profile", "/me/consent": "own data",
+        "/me/attendance": "own data", "/me/notifications": "own data",
+        "/consent/notice": "static notice text",
+    }
+    unclassified = []
+    for route in main.app.routes:
+        methods = getattr(route, "methods", None) or set()
+        if "GET" not in methods or not hasattr(route, "dependant"):
+            continue
+        is_audited = any(
+            "audited" in getattr(dep.call, "__qualname__", "")
+            for dep in route.dependant.dependencies
+        )
+        if not is_audited and route.path not in not_audited:
+            unclassified.append(route.path)
+        if is_audited and route.path in not_audited:
+            unclassified.append(route.path + " (audited AND allow-listed)")
+    unclassified = [p for p in unclassified
+                    if p not in ("/openapi.json", "/docs", "/redoc",
+                                 "/docs/oauth2-redirect")]
+    assert unclassified == [], (
+        f"GET routes neither audited nor allow-listed: {unclassified}")
+    print("Every GET route is either audited or explicitly exempt")
+
+    # Fail closed: no audit table -> the read is refused, data not served.
+    conn = sqlite3.connect(temp_db_path)
+    conn.execute("ALTER TABLE audit_log RENAME TO audit_log_away")
+    conn.commit()
+    conn.close()
+    refused = quiet.get("/students", headers=callers["ORIGINAL"])
+    assert refused.status_code == 503, refused.status_code
+    assert "audit log is unavailable" in refused.text
+    conn = sqlite3.connect(temp_db_path)
+    conn.execute("ALTER TABLE audit_log_away RENAME TO audit_log")
+    conn.commit()
+    conn.close()
+    assert quiet.get("/students", headers=callers["ORIGINAL"]).status_code == 200
+    print("If the read can't be logged it is refused (503); fine once restored")
+
     # The route table itself: no personal-data route may be left open to
     # "any ADMIN" — that is how the Dean/Timetabling/Temporary tiers
     # ended up able to read every student and the access log.
@@ -592,6 +757,23 @@ if __name__ == "__main__":
         os.environ[template_store.KEYS_ENV] = saved_keys
     asyncio.run(_enter_lifespan())
     print("Startup refused without a template key; fine with one")
+
+    conn = sqlite3.connect(temp_db_path)
+    conn.execute("ALTER TABLE audit_log RENAME TO audit_log_away")
+    conn.commit()
+    conn.close()
+    try:
+        try:
+            asyncio.run(_enter_lifespan())
+            raise AssertionError("Expected startup to be refused")
+        except RuntimeError as error:
+            assert "audit log table is missing" in str(error)
+    finally:
+        conn = sqlite3.connect(temp_db_path)
+        conn.execute("ALTER TABLE audit_log_away RENAME TO audit_log")
+        conn.commit()
+        conn.close()
+    print("Startup refused when the audit table is missing")
 
     import shutil
     shutil.rmtree(temp_dir)

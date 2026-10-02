@@ -152,7 +152,9 @@ Timetabling; cameras to Original, Security and Dean. **No endpoint accepts
 account, signed into the login token, and every Dean-visible endpoint
 (roster, summary, cameras, timetable, units) ignores what the client asks
 for and refuses another department; a Dean account with no department
-sees nothing. **Still open:** nothing logs who viewed what, and the
+sees nothing. Reads of personal data are recorded in a **read audit log**
+(who, what, which record, when — never the data returned), readable by the
+Original Admin only; see §5.1. **Still open:** the
 department match is exact text (students, units and cameras carry
 free-text departments, so a spelling mismatch hides data rather than
 exposing it). See R3.
@@ -182,6 +184,7 @@ biometric data must be checked against the Act and Regulations: `[ ]`.
 | Watchlist target face template | Kept after the target is **resolved** (reactivation possible) | `[ ]` decide whether resolved ⇒ delete |
 | Consent history | Kept while the student exists; deleted on erasure | — |
 | Erasure log | Kept (no identity in it) | — |
+| Read audit log (staff usernames, what they viewed) | Purged after 365 days (hourly sweep; `AUDIT_RETENTION_DAYS` in code) | `[ ]` confirm the period |
 
 ---
 
@@ -256,7 +259,7 @@ today.
 |---|---|---|---|
 | R1 | **Biometric data exposed publicly.** `data/` is **committed to git and the repository is public**, since the first commit on 2026-09-03: 110 face photos (20 in `data/faces/`, 89 unrecognised-visitor images, 1 guest photo), 97 face-template files, and the SQLite database. | **Open — incident.** See §7. | **High** |
 | R2 | **Biometric data not fully encrypted at rest.** PRD §9.5 makes encryption at rest a hard requirement. **Face templates** (`.npy`) are now encrypted with AES-256-GCM (`template_store.py`), once a key is set and `migrate` has been run. **Still unencrypted:** the database (student, access-log and attendance records), unrecognised-visitor and guest **photos**, and the legacy `data/faces` photos. Templates already committed to git, backups or disk remnants stay readable in those copies. Anyone with the running server also has the key. | **Partly mitigated** (templates only; needs key set + migration run) | **Medium–High** until the DB and photos are covered |
-| R3 | **Function creep / unauthorised internal access.** Admin tiers are now limited to the data they need (Temporary, Timetabling and Dean can no longer read the student list or access log). A Dean is now scoped to their own department by the server. **Still open:** there is no audit log of who viewed what; Original and Security admins can still see everyone; department is free text, not a controlled list. | **Partly mitigated** | **Medium** |
+| R3 | **Function creep / unauthorised internal access.** Admin tiers are now limited to the data they need (Temporary, Timetabling and Dean can no longer read the student list or access log). A Dean is now scoped to their own department by the server. Reads of personal data are now recorded in an audit log the Original Admin can review. **Still open:** the log is not tamper-evident to someone with direct database access and does not see reads made outside the API; nobody is yet assigned to review it; Original and Security admins can still see everyone; department is free text, not a controlled list. | **Mostly mitigated** if someone actually reviews the log | **Medium–Low** |
 | R4 | **Unlawful or invalid consent** (power imbalance, minors, no alternative route). | Partly mitigated (notice, record, withdrawal) | High until §3.1 resolved |
 | R5 | **Misidentification** — wrong refusal/absence or wrong admission; unequal error rates across groups. | Open — not tested | High |
 | R6 | **Spoofing** — photo/screen held to a camera. | Mitigated (passive liveness); not independently tested | Medium |
@@ -289,6 +292,16 @@ today.
   and verify-before-replace). **Scope: templates only** — see R2.
 - Immediate deletion of rejected-visitor data; 24-hour expiry of admitted
   guests; hourly retention sweep.
+- Read audit log: every allowed read of the student, guest, access-log,
+  unrecognised-visitor, watchlist, investigation, scene, alert, lecturer-roll
+  and Dean-roster endpoints is recorded (account, tier, a Dean's department,
+  what, which record, filters; repeats within five minutes coalesced). A
+  refused caller leaves no entry; **if a read can't be recorded it is
+  refused**, and the server won't start without the table. No endpoint
+  edits or deletes entries; only the Original Admin can read them (and that
+  is logged too). Not logged: aggregates, camera/unit/timetable lists, a
+  person's own data. A test fails if a new GET route is neither audited nor
+  listed as exempt.
 - Admin erasure with dry run, confirmation, fixed-choice reasons,
   all-or-nothing database transaction, identity-free erasure log, and
   refusal while an active watchlist target is linked.
@@ -305,7 +318,7 @@ today.
 | Decide lawful basis; provide a real alternative route; handle under-18s | R4 |
 | Accuracy/bias test on local data; re-tune the threshold; define a human override | R5 |
 | Retention schedule for logs/attendance; expiry for unreviewed visitors and resolved watchlist faces | R7 |
-| Audit log of who viewed personal data; a controlled list of departments instead of free text | R3 |
+| Name who reviews the audit log and how often; restrict `audit_log` at database level to insert-only (or copy it somewhere operators can't edit); a controlled list of departments instead of free text | R3 |
 | Restrict CORS to known origins; rate-limit login and recognition endpoints; shorter token life; confirm TLS | R9 |
 | Student data-access/export and correction process | R10 |
 | Camera signage and a public privacy notice | R14, §3.4 |
@@ -379,9 +392,10 @@ incident or breach occurs; a complaint is upheld; or at least annually.
 | Face-template encryption, key handling, migration | `src/services/template_store.py`, `src/encrypt_templates.py` |
 | Thresholds and cache | `src/services/recognition_service.py`, `src/services/liveness_service.py` |
 | Unrecognised visitors / retention | `src/services/unknown_service.py`, `src/services/retention_service.py` |
+| Read audit log | `src/services/audit_service.py`, `audited()` in `src/api/deps.py`, `/admin/audit` in `src/api/main.py` |
 | Role and tier checks (`require_access`, `require_admin_tier`); tier groups | `src/api/deps.py`, `src/api/main.py` |
 | Schema, RLS | `supabase/schema.sql`, `src/database.py` |
-| Tests | `src/test_consent_service.py`, `src/test_erasure_service.py`, `src/test_api_routes.py`, `src/test_enrollment_service.py`, `src/test_template_store.py` |
+| Tests | `src/test_consent_service.py`, `src/test_erasure_service.py`, `src/test_api_routes.py`, `src/test_enrollment_service.py`, `src/test_template_store.py`, `src/test_audit_service.py` |
 
 ## Appendix B — Pre-deployment checklist
 
