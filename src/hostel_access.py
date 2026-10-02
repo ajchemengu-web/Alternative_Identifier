@@ -4,6 +4,14 @@ import sqlite3
 import os
 from insightface.app import FaceAnalysis
 
+import sys
+
+# Run as a plain script (python src/x.py): make the repo root importable so
+# the shared template store can be used.
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+
+from src.services import template_store
+
 
 # =====================================
 # CONFIGURATION
@@ -63,7 +71,7 @@ def load_students():
 
         if os.path.exists(embedding_path):
 
-            embedding = np.load(embedding_path)
+            embedding = template_store.load_template(embedding_path)
 
             # Safety: normalize embedding
             embedding = embedding / np.linalg.norm(embedding)

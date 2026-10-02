@@ -4,6 +4,14 @@ import os
 import sqlite3
 from insightface.app import FaceAnalysis
 
+import sys
+
+# Run as a plain script (python src/x.py): make the repo root importable so
+# the shared template store can be used.
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+
+from src.services import template_store
+
 
 # =====================================
 # CONFIGURATION
@@ -250,7 +258,7 @@ embedding_path = os.path.join(
     embedding_filename
 )
 
-np.save(
+template_store.save_template(
     embedding_path,
     final_embedding
 )

@@ -8,6 +8,7 @@ from insightface.app import FaceAnalysis
 
 from src.db import get_connection as _get_raw_connection
 from src.services.liveness_service import check_liveness
+from src.services import template_store
 
 
 # ============================================================
@@ -136,7 +137,7 @@ class IdentityCache:
 
             try:
 
-                embedding = np.load(
+                embedding = template_store.load_template(
                     embedding_path
                 )
 
@@ -259,7 +260,7 @@ class IdentityCache:
 
             try:
 
-                embedding = np.load(
+                embedding = template_store.load_template(
                     embedding_path
                 )
 
@@ -364,7 +365,7 @@ class IdentityCache:
 
             try:
 
-                embedding = np.load(embedding_path)
+                embedding = template_store.load_template(embedding_path)
 
                 embedding = embedding.astype(np.float32)
 

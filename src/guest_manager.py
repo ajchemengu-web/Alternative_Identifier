@@ -6,6 +6,14 @@ import uuid
 from datetime import datetime
 from insightface.app import FaceAnalysis
 
+import sys
+
+# Run as a plain script (python src/x.py): make the repo root importable so
+# the shared template store can be used.
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+
+from src.services import template_store
+
 
 # ==========================================
 # CONFIGURATION
@@ -248,7 +256,7 @@ while True:
             embedding_filename
         )
 
-        np.save(
+        template_store.save_template(
             embedding_path,
             embedding
         )

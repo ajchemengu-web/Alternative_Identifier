@@ -36,6 +36,7 @@ from src.services import investigation_service
 from src.services import scene_service
 from src.services import alerts_service
 from src.services import attendance_service
+from src.services import template_store
 from src.api.deps import require_admin_tier, require_roles
 
 
@@ -98,6 +99,10 @@ async def _attendance_sweep_loop():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+
+    # Refuse to start where face templates would be stored unencrypted
+    # by accident (see src/services/template_store.py).
+    template_store.require_configured()
 
     retention_task = asyncio.create_task(_retention_sweep_loop())
     attendance_task = asyncio.create_task(_attendance_sweep_loop())

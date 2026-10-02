@@ -1,4 +1,10 @@
 import os
+from src.services import template_store as _template_store
+
+# Templates are always written encrypted; give the test its own key.
+os.environ.setdefault(
+    "TEMPLATE_ENCRYPTION_KEYS", _template_store.generate_key()
+)
 import sys
 import sqlite3
 import tempfile
@@ -207,7 +213,9 @@ def _save_embedding(embeddings_dir, filename, vector):
     os.makedirs(embeddings_dir, exist_ok=True)
     embedding = np.array(vector, dtype=np.float32)
     embedding = embedding / np.linalg.norm(embedding)
-    np.save(os.path.join(embeddings_dir, filename), embedding)
+    _template_store.save_template(
+        os.path.join(embeddings_dir, filename), embedding
+    )
 
 
 if __name__ == "__main__":

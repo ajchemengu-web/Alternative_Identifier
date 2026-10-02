@@ -1,4 +1,10 @@
 import os
+from src.services import template_store as _template_store
+
+# Templates are always written encrypted; give the test its own key.
+os.environ.setdefault(
+    "TEMPLATE_ENCRYPTION_KEYS", _template_store.generate_key()
+)
 import sqlite3
 import sys
 import tempfile
@@ -225,9 +231,12 @@ if __name__ == "__main__":
     assert linked_target["linked_student_id"] == "STU-1"
     assert linked_target["embedding_file"] is not None
 
-    copied_embedding = np.load(
-        os.path.join(temp_embeddings_dir, linked_target["embedding_file"])
+    from src.services import template_store
+    copied_path = os.path.join(
+        temp_embeddings_dir, linked_target["embedding_file"]
     )
+    assert template_store.is_encrypted(copied_path)
+    copied_embedding = template_store.load_template(copied_path)
     assert np.allclose(copied_embedding, student_embedding)
     print("Created target from an enrolled student's admission_number ->", linked_target)
 

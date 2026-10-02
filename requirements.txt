@@ -15,3 +15,7 @@ psycopg2-binary>=2.9,<3.0
 python-dotenv>=1.0,<2.0
 bcrypt>=4.1,<5.0
 PyJWT>=2.7,<3.0
+
+# AES-256-GCM encryption of face templates at rest
+# (src/services/template_store.py).
+cryptography>=41.0,<48.0

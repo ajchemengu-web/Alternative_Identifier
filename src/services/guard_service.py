@@ -1,10 +1,10 @@
 import os
 import sqlite3
-import shutil
 from datetime import datetime, timedelta
 
 from src.db import get_connection as _get_raw_connection
 from src.services import retention_service
+from src.services import template_store
 
 
 UNKNOWN_EMBEDDINGS_FOLDER = os.path.join(
@@ -264,9 +264,11 @@ def admit_unknown_person(
             "message": "Unknown face embedding not found"
         }
 
-    shutil.copy(
-        source_embedding,
-        destination_embedding
+    # Not shutil.copy: an encrypted template is bound to its own file
+    # name, so it has to be decrypted and re-saved under the new one.
+    template_store.save_template(
+        destination_embedding,
+        template_store.load_template(source_embedding)
     )
 
     # --------------------------------------

@@ -6,6 +6,7 @@ import numpy as np
 
 from src.db import get_connection as _get_raw_connection
 from src.services.liveness_service import check_liveness
+from src.services import template_store
 from src.services.recognition_service import (
     app,
     find_best_match,
@@ -141,7 +142,9 @@ def _load_roster_identities(cursor, entry):
 
             continue
 
-        embedding = np.load(embedding_path).astype(np.float32)
+        embedding = template_store.load_template(
+            embedding_path
+        ).astype(np.float32)
 
         norm = np.linalg.norm(embedding)
 

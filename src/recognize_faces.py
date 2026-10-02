@@ -4,6 +4,14 @@ import os
 import json
 from insightface.app import FaceAnalysis
 
+import sys
+
+# Run as a plain script (python src/x.py): make the repo root importable so
+# the shared template store can be used.
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+
+from src.services import template_store
+
 
 # =====================================
 # LOAD ENROLLED STUDENTS
@@ -32,7 +40,7 @@ for filename in os.listdir(EMBEDDINGS_FOLDER):
         )
 
         # Load embedding
-        embedding = np.load(embedding_path)
+        embedding = template_store.load_template(embedding_path)
 
         # Load metadata
         if os.path.exists(metadata_path):

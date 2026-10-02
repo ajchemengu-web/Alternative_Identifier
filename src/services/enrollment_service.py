@@ -11,6 +11,7 @@ from src.services.recognition_service import (
 )
 from src.services.liveness_service import check_liveness
 from src.services import consent_service
+from src.services import template_store
 from src.services.consent_service import ConsentRequiredError
 
 
@@ -277,7 +278,7 @@ def enroll_student_face(
         embedding_filename
     )
 
-    np.save(
+    template_store.save_template(
         embedding_path,
         final_embedding
     )
@@ -493,7 +494,7 @@ def enroll_own_face(username, images):
         embedding_filename
     )
 
-    np.save(
+    template_store.save_template(
         embedding_path,
         final_embedding
     )

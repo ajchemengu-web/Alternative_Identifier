@@ -107,7 +107,7 @@ other use is intended.
 | Data | Where | Personal / sensitive | Source |
 |---|---|---|---|
 | Student record: student id, name, admission no., hostel, room, department, course, year, semester | `students` | Personal | Admin |
-| **Face template** (numeric embedding) | `data/embeddings/*.npy` | **Sensitive (biometric)** | Student / admin enrolment |
+| **Face template** (numeric embedding) — encrypted at rest | `data/embeddings/*.npy` | **Sensitive (biometric)** | Student / admin enrolment |
 | Login: username, email, bcrypt password hash, role, tier | `users` | Personal | Admin |
 | Access log: person type, id, entrance, match score, decision, guard id, liveness score, timestamp | `access_logs` | Personal (location + time of a named person) | Camera |
 | Class attendance records and "you attended / missed" notifications | `attendance_records`, `attendance_notifications` | Personal | Camera |
@@ -246,7 +246,7 @@ today.
 | # | Risk | Status today | Engineers' draft |
 |---|---|---|---|
 | R1 | **Biometric data exposed publicly.** `data/` is **committed to git and the repository is public**, since the first commit on 2026-09-03: 110 face photos (20 in `data/faces/`, 89 unrecognised-visitor images, 1 guest photo), 97 face-template files, and the SQLite database. | **Open — incident.** See §7. | **High** |
-| R2 | **Templates and database not encrypted at rest.** PRD §9.5 makes this a hard requirement; nothing in the code encrypts `.npy` files or the DB. A stolen disk/backup is a full biometric breach. | **Open** | **High** |
+| R2 | **Biometric data not fully encrypted at rest.** PRD §9.5 makes encryption at rest a hard requirement. **Face templates** (`.npy`) are now encrypted with AES-256-GCM (`template_store.py`), once a key is set and `migrate` has been run. **Still unencrypted:** the database (student, access-log and attendance records), unrecognised-visitor and guest **photos**, and the legacy `data/faces` photos. Templates already committed to git, backups or disk remnants stay readable in those copies. Anyone with the running server also has the key. | **Partly mitigated** (templates only; needs key set + migration run) | **Medium–High** until the DB and photos are covered |
 | R3 | **Function creep / unauthorised internal access.** Any admin tier — including Temporary, Timetabling and Dean — can read all students and the full access log through the API; Dean is not department-scoped on the server; there is no audit log of who viewed what. | Open — role checks exist but are too coarse | **High** |
 | R4 | **Unlawful or invalid consent** (power imbalance, minors, no alternative route). | Partly mitigated (notice, record, withdrawal) | High until §3.1 resolved |
 | R5 | **Misidentification** — wrong refusal/absence or wrong admission; unequal error rates across groups. | Open — not tested | High |
@@ -273,6 +273,11 @@ today.
 - bcrypt password hashing; signed JWTs; server-side role and admin-tier
   checks on every non-public endpoint.
 - Row Level Security enabled on all tables in the Supabase schema.
+- Face templates encrypted at rest (AES-256-GCM, per-write nonce, file name
+  bound into the authentication so a template can't be swapped onto another
+  person; key ring for rotation; atomic writes; server refuses to start
+  without a key unless explicitly opted out; `migrate` command with dry run
+  and verify-before-replace). **Scope: templates only** — see R2.
 - Immediate deletion of rejected-visitor data; 24-hour expiry of admitted
   guests; hourly retention sweep.
 - Admin erasure with dry run, confirmation, fixed-choice reasons,
@@ -286,7 +291,8 @@ today.
 | Item | Addresses |
 |---|---|
 | Make the repository private **and** remove `data/` from git history; treat anything ever pushed as exposed; add `data/` and `*.db` to `.gitignore` | R1 |
-| Encrypt face templates and the database at rest, with managed keys | R2 |
+| Set `TEMPLATE_ENCRYPTION_KEYS` from the host's secret store, back the key up separately from the data, run `python -m src.encrypt_templates migrate`, then set `TEMPLATE_REQUIRE_ENCRYPTED=1` | R2 |
+| Encrypt the database and the visitor/guest/legacy photos at rest (disk or database-level encryption, or stop keeping the photos); decide who holds the key and how it is rotated | R2 |
 | Decide lawful basis; provide a real alternative route; handle under-18s | R4 |
 | Accuracy/bias test on local data; re-tune the threshold; define a human override | R5 |
 | Retention schedule for logs/attendance; expiry for unreviewed visitors and resolved watchlist faces | R7 |
@@ -361,18 +367,20 @@ incident or breach occurs; a complaint is upheld; or at least annually.
 | Consent enforced on enrolment; withdrawal deletes template | `src/services/enrollment_service.py` |
 | Endpoints (`/consent/notice`, `/me/consent*`, `/admin/students/*`) | `src/api/main.py` |
 | Erasure | `src/services/erasure_service.py` |
+| Face-template encryption, key handling, migration | `src/services/template_store.py`, `src/encrypt_templates.py` |
 | Thresholds and cache | `src/services/recognition_service.py`, `src/services/liveness_service.py` |
 | Unrecognised visitors / retention | `src/services/unknown_service.py`, `src/services/retention_service.py` |
 | Role and tier checks | `src/api/deps.py` |
 | Schema, RLS | `supabase/schema.sql`, `src/database.py` |
-| Tests | `src/test_consent_service.py`, `src/test_erasure_service.py`, `src/test_api_routes.py`, `src/test_enrollment_service.py` |
+| Tests | `src/test_consent_service.py`, `src/test_erasure_service.py`, `src/test_api_routes.py`, `src/test_enrollment_service.py`, `src/test_template_store.py` |
 
 ## Appendix B — Pre-deployment checklist
 
 - [ ] ODPC registration current
 - [ ] DPIA completed, signed, and (if required) submitted
 - [ ] Repository private, `data/` purged from history (§7)
-- [ ] Encryption at rest in place
+- [ ] Template encryption key set, backed up separately, `migrate` run, strict mode on
+- [ ] Database and photos encrypted at rest (not covered by template encryption)
 - [ ] Consent notice reviewed by counsel; `CONSENT_CONTROLLER_NAME` and `CONSENT_CONTACT` set
 - [ ] Alternative non-biometric route exists and is announced
 - [ ] Under-18 handling decided

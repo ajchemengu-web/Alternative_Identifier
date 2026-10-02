@@ -1,4 +1,10 @@
 import os
+from src.services import template_store as _template_store
+
+# Templates are always written encrypted; give the test its own key.
+os.environ.setdefault(
+    "TEMPLATE_ENCRYPTION_KEYS", _template_store.generate_key()
+)
 import sqlite3
 import tempfile
 
@@ -412,6 +418,27 @@ if __name__ == "__main__":
         "student_id": weird_id, "confirm": weird_id,
         "reason": "GRADUATED"}).status_code == 404
     print("Erasing again -> 404")
+
+    # The server refuses to start without an encryption key (and starts
+    # with one) — the lifespan runs the check before anything else.
+    import asyncio
+    from src.services import template_store
+
+    async def _enter_lifespan():
+        async with main.lifespan(main.app):
+            pass
+
+    saved_keys = os.environ.pop(template_store.KEYS_ENV)
+    try:
+        try:
+            asyncio.run(_enter_lifespan())
+            raise AssertionError("Expected startup to be refused")
+        except RuntimeError as error:
+            assert "encryption is not configured" in str(error)
+    finally:
+        os.environ[template_store.KEYS_ENV] = saved_keys
+    asyncio.run(_enter_lifespan())
+    print("Startup refused without a template key; fine with one")
 
     import shutil
     shutil.rmtree(temp_dir)

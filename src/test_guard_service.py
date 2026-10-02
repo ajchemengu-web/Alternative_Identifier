@@ -1,6 +1,14 @@
 import os
+from src.services import template_store as _template_store
+
+# Templates are always written encrypted; give the test its own key.
+os.environ.setdefault(
+    "TEMPLATE_ENCRYPTION_KEYS", _template_store.generate_key()
+)
 import sqlite3
 import tempfile
+
+import numpy as np
 from datetime import datetime, timedelta
 
 
@@ -101,8 +109,11 @@ if __name__ == "__main__":
     unk2_embedding = os.path.join(unknown_embeddings_dir, "UNK-2.npy")
     with open(unk2_image, "w") as f:
         f.write("fake image 2")
-    with open(unk2_embedding, "w") as f:
-        f.write("fake embedding 2")
+    # A real (encrypted) template: admit has to decrypt and re-save it.
+    from src.services import template_store
+    template_store.save_template(
+        unk2_embedding, np.array([0.1, 0.2, 0.3], dtype=np.float32)
+    )
 
     already_reviewed_image = os.path.join(temp_dir, "UNK-3.jpg")
     with open(already_reviewed_image, "w") as f:

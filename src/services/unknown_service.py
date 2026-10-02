@@ -7,6 +7,7 @@ import numpy as np
 
 from src.db import get_connection
 from src.services.recognition_service import app
+from src.services import template_store
 
 
 # ==========================================
@@ -99,7 +100,7 @@ def load_unknown_embeddings():
 
         if os.path.exists(embedding_path):
 
-            embedding = np.load(embedding_path)
+            embedding = template_store.load_template(embedding_path)
 
             embedding = normalize_embedding(
                 embedding
@@ -272,7 +273,7 @@ def create_unknown_person(image):
     )
 
 
-    np.save(
+    template_store.save_template(
         embedding_path,
         face_embedding
     )

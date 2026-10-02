@@ -6,6 +6,7 @@ import numpy as np
 
 from src.db import get_connection
 from src.services.recognition_service import app, STUDENT_EMBEDDINGS_FOLDER
+from src.services import template_store
 
 
 # ============================================================
@@ -127,11 +128,11 @@ def _copy_student_embedding(target_id, admission_number):
             "That student's facial embedding file is missing on disk."
         )
 
-    embedding = np.load(source_path)
+    embedding = template_store.load_template(source_path)
 
     embedding_filename = f"{target_id}.npy"
 
-    np.save(
+    template_store.save_template(
         os.path.join(TARGET_EMBEDDINGS_FOLDER, embedding_filename),
         embedding
     )
@@ -189,7 +190,7 @@ def create_target(
 
         embedding_filename = f"{target_id}.npy"
 
-        np.save(
+        template_store.save_template(
             os.path.join(TARGET_EMBEDDINGS_FOLDER, embedding_filename),
             final_embedding
         )
