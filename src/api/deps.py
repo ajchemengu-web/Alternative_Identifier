@@ -70,3 +70,26 @@ def require_admin_tier(*tiers):
         return user
 
     return checker
+
+
+def require_access(roles=(), admin_tiers=()):
+
+    # For endpoints that serve some non-admin roles AND specific admin
+    # tiers (e.g. a guard or the Original/Security admin). An ADMIN is
+    # let in only if their tier is listed — "any admin" is not enough.
+    def checker(user: dict = Depends(get_current_user)):
+
+        if user["role"] in roles:
+
+            return user
+
+        if user["role"] == "ADMIN" and user.get("admin_tier") in admin_tiers:
+
+            return user
+
+        raise HTTPException(
+            status_code=403,
+            detail="Insufficient permissions for this role or admin tier"
+        )
+
+    return checker

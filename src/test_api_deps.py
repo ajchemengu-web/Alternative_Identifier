@@ -1,7 +1,12 @@
 from fastapi import HTTPException
 
 from src.services.auth_service import create_access_token
-from src.api.deps import get_current_user, require_admin_tier, require_roles
+from src.api.deps import (
+    get_current_user,
+    require_access,
+    require_admin_tier,
+    require_roles,
+)
 
 
 def _expect_http_error(callable_, status_code):
@@ -106,5 +111,38 @@ if __name__ == "__main__":
         403
     )
     print("Guard token against require_admin_tier('ORIGINAL') -> 403. OK")
+
+    # ------------------------------------------------------------
+    # require_access: listed roles, or an ADMIN of a listed tier only
+    # ------------------------------------------------------------
+
+    guard_or_original = require_access(
+        roles=("GUARD",), admin_tiers=("ORIGINAL", "SECURITY")
+    )
+
+    def _as(token):
+        return guard_or_original(user=get_current_user(f"Bearer {token}"))
+
+    assert _as(guard_token)["role"] == "GUARD"
+    assert _as(admin_token)["admin_tier"] == "ORIGINAL"
+    assert _as(create_access_token("s", "ADMIN", "SECURITY"))
+    print("require_access lets the listed role and listed tiers in. OK")
+
+    for token in (
+        temp_admin_token,
+        create_access_token("t", "ADMIN", "TIMETABLING"),
+        create_access_token("d", "ADMIN", "DEAN"),
+        create_access_token("stu", "STUDENT", None),
+    ):
+        _expect_http_error(lambda token=token: _as(token), 403)
+    print("require_access refuses other admin tiers and other roles. OK")
+
+    # A non-ADMIN role is never let in through the tier list.
+    tier_only = require_access(admin_tiers=("ORIGINAL",))
+    _expect_http_error(
+        lambda: tier_only(user=get_current_user(f"Bearer {guard_token}")),
+        403
+    )
+    print("A guard is not admitted via the admin-tier list. OK")
 
     print("\napi deps smoke test passed.")

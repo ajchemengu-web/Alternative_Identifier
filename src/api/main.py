@@ -37,7 +37,7 @@ from src.services import scene_service
 from src.services import alerts_service
 from src.services import attendance_service
 from src.services import template_store
-from src.api.deps import require_admin_tier, require_roles
+from src.api.deps import require_access, require_admin_tier, require_roles
 
 
 # ==========================================
@@ -95,6 +95,15 @@ async def _attendance_sweep_loop():
             print(f"[attendance] sweep failed: {error}")
 
         await asyncio.sleep(ATTENDANCE_SWEEP_INTERVAL_SECONDS)
+
+
+# Which admin tiers may use which endpoints (docs/PRD.md §8). "Any
+# admin" is deliberately not an option for personal data: a Timetabling
+# or Dean admin has no business reading every student or the full
+# access log, and a Temporary admin exists only to enrol.
+MONITORING_TIERS = ("ORIGINAL", "SECURITY")
+ENROLLMENT_TIERS = ("ORIGINAL", "SECURITY", "TEMPORARY")
+SCHEDULING_TIERS = ("ORIGINAL", "TIMETABLING", "DEAN")
 
 
 @asynccontextmanager
@@ -183,7 +192,7 @@ def health():
 @app.get("/students")
 def get_students(
     department: Optional[str] = None,
-    current_user: dict = Depends(require_roles("ADMIN"))
+    current_user: dict = Depends(require_admin_tier(*MONITORING_TIERS))
 ):
 
     connection = get_connection()
@@ -271,7 +280,7 @@ class StudentRecordRequest(BaseModel):
 @app.post("/students")
 def create_student(
     request: StudentRecordRequest,
-    current_user: dict = Depends(require_roles("ADMIN"))
+    current_user: dict = Depends(require_admin_tier(*ENROLLMENT_TIERS))
 ):
 
     try:
@@ -303,7 +312,7 @@ def create_student(
 # ==========================================
 
 @app.get("/guests")
-def get_guests(current_user: dict = Depends(require_roles("ADMIN"))):
+def get_guests(current_user: dict = Depends(require_admin_tier(*MONITORING_TIERS))):
 
     connection = get_connection()
 
@@ -336,7 +345,7 @@ def get_guests(current_user: dict = Depends(require_roles("ADMIN"))):
 
 @app.get("/access-logs")
 def get_access_logs(
-    current_user: dict = Depends(require_roles("ADMIN", "GUARD"))
+    current_user: dict = Depends(require_access(roles=("GUARD",), admin_tiers=MONITORING_TIERS))
 ):
 
     connection = get_connection()
@@ -390,7 +399,7 @@ class FalsePositiveRequest(BaseModel):
 def flag_access_log_false_positive(
     access_log_id: int,
     request: FalsePositiveRequest,
-    current_user: dict = Depends(require_roles("ADMIN", "GUARD"))
+    current_user: dict = Depends(require_access(roles=("GUARD",), admin_tiers=MONITORING_TIERS))
 ):
 
     updated = analytics_service.flag_false_positive(
@@ -412,7 +421,7 @@ def flag_access_log_false_positive(
 @app.get("/analytics/summary")
 def get_analytics_summary(
     since_days: Optional[int] = None,
-    current_user: dict = Depends(require_roles("ADMIN"))
+    current_user: dict = Depends(require_admin_tier(*MONITORING_TIERS))
 ):
 
     since = (
@@ -432,7 +441,7 @@ def get_analytics_summary(
 async def recognize(
     file: UploadFile = File(...),
     camera_id: Optional[str] = Form(None),
-    current_user: dict = Depends(require_roles("ADMIN", "GUARD"))
+    current_user: dict = Depends(require_access(roles=("GUARD",), admin_tiers=MONITORING_TIERS))
 ):
 
     # Check uploaded file type
@@ -519,7 +528,7 @@ async def recognize(
 async def recognize_attendance(
     file: UploadFile = File(...),
     camera_id: str = Form(...),
-    current_user: dict = Depends(require_roles("ADMIN"))
+    current_user: dict = Depends(require_admin_tier("ORIGINAL"))
 ):
 
     if not file.content_type.startswith("image/"):
@@ -557,7 +566,7 @@ async def recognize_attendance(
 @app.get("/guard/pending")
 
 def get_pending_persons(
-    current_user: dict = Depends(require_roles("ADMIN", "GUARD"))
+    current_user: dict = Depends(require_access(roles=("GUARD",), admin_tiers=MONITORING_TIERS))
 ):
 
     pending = get_pending_unknowns()
@@ -574,7 +583,7 @@ def get_pending_persons(
 
 def admit_person(
     unknown_id: str,
-    current_user: dict = Depends(require_roles("ADMIN", "GUARD"))
+    current_user: dict = Depends(require_access(roles=("GUARD",), admin_tiers=MONITORING_TIERS))
 ):
 
     result = admit_unknown_person(
@@ -587,7 +596,7 @@ def admit_person(
 
 def reject_person(
     unknown_id: str,
-    current_user: dict = Depends(require_roles("ADMIN", "GUARD"))
+    current_user: dict = Depends(require_access(roles=("GUARD",), admin_tiers=MONITORING_TIERS))
 ):
 
     result = reject_unknown_person(
@@ -625,7 +634,10 @@ class LoginRequest(BaseModel):
 @app.post("/enroll")
 def enroll(
     request: EnrollRequest,
-    current_user: dict = Depends(require_roles("ADMIN"))
+    # Creates login accounts of ANY role/tier — including other admins —
+    # so it is the Original Admin's alone. Anyone else able to call it
+    # could mint themselves an Original Admin account.
+    current_user: dict = Depends(require_admin_tier("ORIGINAL"))
 ):
 
     try:
@@ -727,7 +739,7 @@ async def enroll_student_face_endpoint(
     semester: Optional[int] = Form(None),
     consent_confirmed: bool = Form(False),
     files: List[UploadFile] = File(...),
-    current_user: dict = Depends(require_roles("ADMIN"))
+    current_user: dict = Depends(require_admin_tier(*ENROLLMENT_TIERS))
 ):
 
     images = []
@@ -825,7 +837,7 @@ def get_units(
     semester: Optional[int] = None,
     lecturer_id: Optional[str] = None,
     unclaimed: Optional[bool] = None,
-    current_user: dict = Depends(require_roles("ADMIN", "LECTURER"))
+    current_user: dict = Depends(require_access(roles=("LECTURER",), admin_tiers=SCHEDULING_TIERS))
 ):
 
     return unit_service.list_units(
@@ -976,7 +988,7 @@ def get_timetable(
     semester: Optional[int] = None,
     lecturer_id: Optional[str] = None,
     unit_id: Optional[int] = None,
-    current_user: dict = Depends(require_roles("ADMIN", "STUDENT", "LECTURER"))
+    current_user: dict = Depends(require_access(roles=("STUDENT", "LECTURER"), admin_tiers=SCHEDULING_TIERS))
 ):
 
     return timetable_service.list_entries(
@@ -1151,7 +1163,7 @@ def get_cameras(
     camera_type: Optional[str] = None,
     department: Optional[str] = None,
     status: Optional[str] = None,
-    current_user: dict = Depends(require_roles("ADMIN"))
+    current_user: dict = Depends(require_admin_tier("ORIGINAL", "SECURITY", "DEAN"))
 ):
 
     return camera_service.list_cameras(camera_type, department, status)
@@ -1416,7 +1428,7 @@ def _student_id_for(username):
 
 @app.get("/consent/notice")
 def get_consent_notice(
-    current_user: dict = Depends(require_roles("ADMIN", "STUDENT"))
+    current_user: dict = Depends(require_access(roles=("STUDENT",), admin_tiers=ENROLLMENT_TIERS))
 ):
 
     # Not secret — it's exactly what a person is shown before agreeing.
@@ -1615,7 +1627,7 @@ class LecturerRequest(BaseModel):
 @app.get("/lecturers")
 def get_lecturers(
     department: Optional[str] = None,
-    current_user: dict = Depends(require_roles("ADMIN"))
+    current_user: dict = Depends(require_admin_tier("ORIGINAL", "TIMETABLING"))
 ):
 
     return lecturer_service.list_lecturers(department)
@@ -1624,7 +1636,7 @@ def get_lecturers(
 @app.post("/lecturers")
 def create_lecturer(
     request: LecturerRequest,
-    current_user: dict = Depends(require_roles("ADMIN"))
+    current_user: dict = Depends(require_admin_tier("ORIGINAL"))
 ):
 
     try:

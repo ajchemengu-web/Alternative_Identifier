@@ -419,6 +419,87 @@ if __name__ == "__main__":
         "reason": "GRADUATED"}).status_code == 404
     print("Erasing again -> 404")
 
+    # ------------------------------------------------------------
+    # WHO MAY CALL WHAT: "any admin" is not enough for personal data.
+    # A denied caller gets 403; an allowed one gets anything else (the
+    # handler may then reject the empty request or hit a table this
+    # test schema lacks — only the authorisation decision is checked).
+    # ------------------------------------------------------------
+
+    def _token(role, tier=None):
+        return {"Authorization": "Bearer " + create_access_token(
+            f"{role}-{tier}".lower(), role, tier)}
+
+    callers = {
+        "ORIGINAL": _token("ADMIN", "ORIGINAL"),
+        "SECURITY": _token("ADMIN", "SECURITY"),
+        "TEMPORARY": _token("ADMIN", "TEMPORARY"),
+        "TIMETABLING": _token("ADMIN", "TIMETABLING"),
+        "DEAN": _token("ADMIN", "DEAN"),
+        "GUARD": _token("GUARD"),
+        "STUDENT": _token("STUDENT"),
+        "LECTURER": _token("LECTURER"),
+    }
+
+    everyone = set(callers)
+    admins = {"ORIGINAL", "SECURITY", "TEMPORARY", "TIMETABLING", "DEAN"}
+
+    expected = {
+        ("GET", "/students"): {"ORIGINAL", "SECURITY"},
+        ("POST", "/students"): {"ORIGINAL", "SECURITY", "TEMPORARY"},
+        ("GET", "/guests"): {"ORIGINAL", "SECURITY"},
+        ("GET", "/access-logs"): {"ORIGINAL", "SECURITY", "GUARD"},
+        ("PATCH", "/access-logs/1/false-positive"):
+            {"ORIGINAL", "SECURITY", "GUARD"},
+        ("GET", "/analytics/summary"): {"ORIGINAL", "SECURITY"},
+        ("POST", "/recognize"): {"ORIGINAL", "SECURITY", "GUARD"},
+        ("POST", "/attendance/recognize"): {"ORIGINAL"},
+        ("GET", "/guard/pending"): {"ORIGINAL", "SECURITY", "GUARD"},
+        ("POST", "/guard/admit/UNK-1"): {"ORIGINAL", "SECURITY", "GUARD"},
+        ("POST", "/guard/reject/UNK-1"): {"ORIGINAL", "SECURITY", "GUARD"},
+        # Creates accounts of any role/tier, admins included.
+        ("POST", "/enroll"): {"ORIGINAL"},
+        ("POST", "/enroll/student-face"):
+            {"ORIGINAL", "SECURITY", "TEMPORARY"},
+        ("GET", "/cameras"): {"ORIGINAL", "SECURITY", "DEAN"},
+        ("GET", "/lecturers"): {"ORIGINAL", "TIMETABLING"},
+        ("POST", "/lecturers"): {"ORIGINAL"},
+        ("GET", "/units"): {"ORIGINAL", "TIMETABLING", "DEAN", "LECTURER"},
+        ("GET", "/timetable"):
+            {"ORIGINAL", "TIMETABLING", "DEAN", "STUDENT", "LECTURER"},
+        ("GET", "/consent/notice"):
+            {"ORIGINAL", "SECURITY", "TEMPORARY", "STUDENT"},
+    }
+
+    quiet = TestClient(main.app, raise_server_exceptions=False)
+
+    for (method, path), allowed in expected.items():
+
+        for who, headers in callers.items():
+
+            status = quiet.request(method, path, headers=headers).status_code
+
+            if who in allowed:
+                assert status not in (401, 403), (
+                    f"{who} should be allowed {method} {path}, got {status}")
+            else:
+                assert status == 403, (
+                    f"{who} must be refused {method} {path}, got {status}")
+
+    assert quiet.get("/students").status_code == 401
+    assert admins <= everyone
+    print(f"{len(expected)} endpoints x {len(callers)} callers: "
+          "each tier gets exactly its own access")
+
+    # The route table itself: no personal-data route may be left open to
+    # "any ADMIN" — that is how the Dean/Timetabling/Temporary tiers
+    # ended up able to read every student and the access log.
+    import inspect
+    source = inspect.getsource(main)
+    assert 'require_roles("ADMIN"' not in source, (
+        "an endpoint is gated on role ADMIN alone (any tier)")
+    print("No endpoint is gated on 'any ADMIN'")
+
     # The server refuses to start without an encryption key (and starts
     # with one) — the lifespan runs the check before anything else.
     import asyncio

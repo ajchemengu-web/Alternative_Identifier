@@ -140,13 +140,18 @@ passers-by captured by checkpoint cameras**; persons on the watchlist.
 | Timetabling / Dean | Timetable; Dean also a department roster/summary |
 | Temporary Admin | Intended: enrolment only; expires when an Original Admin marks the task done |
 
-Enforced server-side by role/tier checks (`src/api/deps.py`), but **the
-checks are coarser than the dashboards suggest**: `GET /access-logs` and
-`GET /students` accept *any* admin tier (including Timetabling, Dean and
-the enrolment-only Temporary Admin), so those people can read every
-student's record and the full access log by calling the API directly. And
-the Dean role is not restricted to its own department on the server
-(department is just a request parameter). See R3.
+Enforced server-side by role/tier checks (`src/api/deps.py`). Personal-data
+endpoints are limited to the tiers that need them: the student list,
+guest list, access log, analytics and the guard queue to Original and
+Security admins (and guards for the log/queue); student enrolment to Original,
+Security and Temporary admins; creating login accounts (`POST /enroll`, which
+can mint any role including other admins) to the Original admin only; the lecturer list to Original and
+Timetabling; cameras to Original, Security and Dean. **No endpoint accepts
+"any admin" any more** (a test fails if one does). **Still open:** the
+Dean role is not restricted to its own department on the server
+(department is just a request parameter, because a Dean's account does not
+record which department it belongs to), and nothing logs who viewed what.
+See R3.
 
 ### 2.6 Processors, hosting and transfers — `[ ]` to complete
 
@@ -247,7 +252,7 @@ today.
 |---|---|---|---|
 | R1 | **Biometric data exposed publicly.** `data/` is **committed to git and the repository is public**, since the first commit on 2026-09-03: 110 face photos (20 in `data/faces/`, 89 unrecognised-visitor images, 1 guest photo), 97 face-template files, and the SQLite database. | **Open — incident.** See §7. | **High** |
 | R2 | **Biometric data not fully encrypted at rest.** PRD §9.5 makes encryption at rest a hard requirement. **Face templates** (`.npy`) are now encrypted with AES-256-GCM (`template_store.py`), once a key is set and `migrate` has been run. **Still unencrypted:** the database (student, access-log and attendance records), unrecognised-visitor and guest **photos**, and the legacy `data/faces` photos. Templates already committed to git, backups or disk remnants stay readable in those copies. Anyone with the running server also has the key. | **Partly mitigated** (templates only; needs key set + migration run) | **Medium–High** until the DB and photos are covered |
-| R3 | **Function creep / unauthorised internal access.** Any admin tier — including Temporary, Timetabling and Dean — can read all students and the full access log through the API; Dean is not department-scoped on the server; there is no audit log of who viewed what. | Open — role checks exist but are too coarse | **High** |
+| R3 | **Function creep / unauthorised internal access.** Admin tiers are now limited to the data they need (Temporary, Timetabling and Dean can no longer read the student list or access log). **Still open:** a Dean can read any department's roster/summary by changing a request parameter; there is no audit log of who viewed what; Original and Security admins can still see everyone. | **Partly mitigated** | **Medium–High** |
 | R4 | **Unlawful or invalid consent** (power imbalance, minors, no alternative route). | Partly mitigated (notice, record, withdrawal) | High until §3.1 resolved |
 | R5 | **Misidentification** — wrong refusal/absence or wrong admission; unequal error rates across groups. | Open — not tested | High |
 | R6 | **Spoofing** — photo/screen held to a camera. | Mitigated (passive liveness); not independently tested | Medium |
@@ -296,7 +301,7 @@ today.
 | Decide lawful basis; provide a real alternative route; handle under-18s | R4 |
 | Accuracy/bias test on local data; re-tune the threshold; define a human override | R5 |
 | Retention schedule for logs/attendance; expiry for unreviewed visitors and resolved watchlist faces | R7 |
-| Restrict `/students` and `/access-logs` to the tiers that need them (not Temporary/Timetabling); scope Dean to its department server-side; audit log of reads | R3 |
+| Scope Dean to its own department server-side (needs a department on the Dean's account); audit log of who viewed personal data | R3 |
 | Restrict CORS to known origins; rate-limit login and recognition endpoints; shorter token life; confirm TLS | R9 |
 | Student data-access/export and correction process | R10 |
 | Camera signage and a public privacy notice | R14, §3.4 |
@@ -370,7 +375,7 @@ incident or breach occurs; a complaint is upheld; or at least annually.
 | Face-template encryption, key handling, migration | `src/services/template_store.py`, `src/encrypt_templates.py` |
 | Thresholds and cache | `src/services/recognition_service.py`, `src/services/liveness_service.py` |
 | Unrecognised visitors / retention | `src/services/unknown_service.py`, `src/services/retention_service.py` |
-| Role and tier checks | `src/api/deps.py` |
+| Role and tier checks (`require_access`, `require_admin_tier`); tier groups | `src/api/deps.py`, `src/api/main.py` |
 | Schema, RLS | `supabase/schema.sql`, `src/database.py` |
 | Tests | `src/test_consent_service.py`, `src/test_erasure_service.py`, `src/test_api_routes.py`, `src/test_enrollment_service.py`, `src/test_template_store.py` |
 
