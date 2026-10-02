@@ -37,7 +37,12 @@ from src.services import scene_service
 from src.services import alerts_service
 from src.services import attendance_service
 from src.services import template_store
-from src.api.deps import require_access, require_admin_tier, require_roles
+from src.api.deps import (
+    require_access,
+    require_admin_tier,
+    require_roles,
+    scope_department,
+)
 
 
 # ==========================================
@@ -623,6 +628,7 @@ class EnrollRequest(BaseModel):
     admin_tier: Optional[str] = None
     linked_person_id: Optional[str] = None
     location: Optional[str] = None
+    department: Optional[str] = None
 
 
 class LoginRequest(BaseModel):
@@ -649,7 +655,8 @@ def enroll(
             role=request.role,
             admin_tier=request.admin_tier,
             linked_person_id=request.linked_person_id,
-            location=request.location
+            location=request.location,
+            department=request.department
         )
 
     except ValueError as error:
@@ -841,7 +848,7 @@ def get_units(
 ):
 
     return unit_service.list_units(
-        department=department,
+        department=scope_department(current_user, department),
         course=course,
         year=year,
         semester=semester,
@@ -994,7 +1001,7 @@ def get_timetable(
     return timetable_service.list_entries(
         course=course,
         year=year,
-        department=department,
+        department=scope_department(current_user, department),
         facilitator=facilitator,
         semester=semester,
         lecturer_id=lecturer_id,
@@ -1099,7 +1106,9 @@ def get_dean_roster(
     )
 ):
 
-    return dean_service.get_roster(department)
+    return dean_service.get_roster(
+        scope_department(current_user, department)
+    )
 
 
 @app.get("/dean/summary")
@@ -1110,7 +1119,9 @@ def get_dean_summary(
     )
 ):
 
-    return dean_service.get_summary(department)
+    return dean_service.get_summary(
+        scope_department(current_user, department)
+    )
 
 
 # ==========================================
@@ -1166,7 +1177,11 @@ def get_cameras(
     current_user: dict = Depends(require_admin_tier("ORIGINAL", "SECURITY", "DEAN"))
 ):
 
-    return camera_service.list_cameras(camera_type, department, status)
+    return camera_service.list_cameras(
+        camera_type,
+        scope_department(current_user, department),
+        status
+    )
 
 
 @app.post("/cameras")

@@ -147,11 +147,15 @@ Security admins (and guards for the log/queue); student enrolment to Original,
 Security and Temporary admins; creating login accounts (`POST /enroll`, which
 can mint any role including other admins) to the Original admin only; the lecturer list to Original and
 Timetabling; cameras to Original, Security and Dean. **No endpoint accepts
-"any admin" any more** (a test fails if one does). **Still open:** the
-Dean role is not restricted to its own department on the server
-(department is just a request parameter, because a Dean's account does not
-record which department it belongs to), and nothing logs who viewed what.
-See R3.
+"any admin" any more** (a test fails if one does). A Dean is limited to
+**their own department on the server**: the department is stored on the
+account, signed into the login token, and every Dean-visible endpoint
+(roster, summary, cameras, timetable, units) ignores what the client asks
+for and refuses another department; a Dean account with no department
+sees nothing. **Still open:** nothing logs who viewed what, and the
+department match is exact text (students, units and cameras carry
+free-text departments, so a spelling mismatch hides data rather than
+exposing it). See R3.
 
 ### 2.6 Processors, hosting and transfers — `[ ]` to complete
 
@@ -252,7 +256,7 @@ today.
 |---|---|---|---|
 | R1 | **Biometric data exposed publicly.** `data/` is **committed to git and the repository is public**, since the first commit on 2026-09-03: 110 face photos (20 in `data/faces/`, 89 unrecognised-visitor images, 1 guest photo), 97 face-template files, and the SQLite database. | **Open — incident.** See §7. | **High** |
 | R2 | **Biometric data not fully encrypted at rest.** PRD §9.5 makes encryption at rest a hard requirement. **Face templates** (`.npy`) are now encrypted with AES-256-GCM (`template_store.py`), once a key is set and `migrate` has been run. **Still unencrypted:** the database (student, access-log and attendance records), unrecognised-visitor and guest **photos**, and the legacy `data/faces` photos. Templates already committed to git, backups or disk remnants stay readable in those copies. Anyone with the running server also has the key. | **Partly mitigated** (templates only; needs key set + migration run) | **Medium–High** until the DB and photos are covered |
-| R3 | **Function creep / unauthorised internal access.** Admin tiers are now limited to the data they need (Temporary, Timetabling and Dean can no longer read the student list or access log). **Still open:** a Dean can read any department's roster/summary by changing a request parameter; there is no audit log of who viewed what; Original and Security admins can still see everyone. | **Partly mitigated** | **Medium–High** |
+| R3 | **Function creep / unauthorised internal access.** Admin tiers are now limited to the data they need (Temporary, Timetabling and Dean can no longer read the student list or access log). A Dean is now scoped to their own department by the server. **Still open:** there is no audit log of who viewed what; Original and Security admins can still see everyone; department is free text, not a controlled list. | **Partly mitigated** | **Medium** |
 | R4 | **Unlawful or invalid consent** (power imbalance, minors, no alternative route). | Partly mitigated (notice, record, withdrawal) | High until §3.1 resolved |
 | R5 | **Misidentification** — wrong refusal/absence or wrong admission; unequal error rates across groups. | Open — not tested | High |
 | R6 | **Spoofing** — photo/screen held to a camera. | Mitigated (passive liveness); not independently tested | Medium |
@@ -301,7 +305,7 @@ today.
 | Decide lawful basis; provide a real alternative route; handle under-18s | R4 |
 | Accuracy/bias test on local data; re-tune the threshold; define a human override | R5 |
 | Retention schedule for logs/attendance; expiry for unreviewed visitors and resolved watchlist faces | R7 |
-| Scope Dean to its own department server-side (needs a department on the Dean's account); audit log of who viewed personal data | R3 |
+| Audit log of who viewed personal data; a controlled list of departments instead of free text | R3 |
 | Restrict CORS to known origins; rate-limit login and recognition endpoints; shorter token life; confirm TLS | R9 |
 | Student data-access/export and correction process | R10 |
 | Camera signage and a public privacy notice | R14, §3.4 |

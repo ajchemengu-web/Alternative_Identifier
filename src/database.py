@@ -107,6 +107,10 @@ def initialize_database():
 
         linked_person_id TEXT,
 
+        location TEXT,
+
+        department TEXT,
+
         temp_expires_at DATETIME,
 
         is_active INTEGER NOT NULL DEFAULT 1,

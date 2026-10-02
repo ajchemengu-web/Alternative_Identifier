@@ -92,7 +92,7 @@ def _jwt_secret():
     return secret
 
 
-def create_access_token(username, role, admin_tier):
+def create_access_token(username, role, admin_tier, department=None):
 
     payload = {
 
@@ -101,6 +101,11 @@ def create_access_token(username, role, admin_tier):
         "role": role,
 
         "admin_tier": admin_tier,
+
+        # Only set for a Dean: the school whose data they may see. It is
+        # signed into the token so the server — not a request parameter
+        # the client controls — decides the scope.
+        "department": department,
 
         "exp": datetime.now(timezone.utc) + ACCESS_TOKEN_TTL
     }
@@ -132,7 +137,9 @@ def decode_access_token(token):
 
         "role": payload.get("role"),
 
-        "admin_tier": payload.get("admin_tier")
+        "admin_tier": payload.get("admin_tier"),
+
+        "department": payload.get("department")
     }
 
 
@@ -179,7 +186,7 @@ def resolve_dashboard(role, admin_tier=None):
 # VALIDATION
 # ============================================================
 
-def _validate_role_and_tier(role, admin_tier, location):
+def _validate_role_and_tier(role, admin_tier, location, department=None):
 
     if role not in ROLES:
 
@@ -199,6 +206,21 @@ def _validate_role_and_tier(role, admin_tier, location):
 
         raise ValueError(
             "admin_tier only applies to role=ADMIN"
+        )
+
+    if role == "ADMIN" and admin_tier == "DEAN":
+
+        if not department or not department.strip():
+
+            raise ValueError(
+                "DEAN accounts require a department — the school "
+                "whose data they may see (docs/PRD.md §8)"
+            )
+
+    elif department is not None:
+
+        raise ValueError(
+            "department only applies to admin_tier=DEAN"
         )
 
     if role == "GUARD":
@@ -229,10 +251,15 @@ def create_user(
     admin_tier=None,
     linked_person_id=None,
     temp_expires_at=None,
-    location=None
+    location=None,
+    department=None
 ):
 
-    _validate_role_and_tier(role, admin_tier, location)
+    if department is not None:
+
+        department = department.strip()
+
+    _validate_role_and_tier(role, admin_tier, location, department)
 
     connection = get_connection()
 
@@ -247,9 +274,10 @@ def create_user(
             admin_tier,
             linked_person_id,
             temp_expires_at,
-            location
+            location,
+            department
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         username,
         hash_password(password),
@@ -258,7 +286,8 @@ def create_user(
         admin_tier,
         linked_person_id,
         temp_expires_at,
-        location
+        location,
+        department
     ))
 
     connection.commit()
@@ -285,6 +314,8 @@ def create_user(
 
         "location": location,
 
+        "department": department,
+
         "dashboard": resolve_dashboard(role, admin_tier)
     }
 
@@ -310,6 +341,7 @@ def authenticate(username, password):
             role,
             admin_tier,
             location,
+            department,
             temp_expires_at,
             is_active
         FROM users
@@ -374,6 +406,8 @@ def authenticate(username, password):
 
         "location": user["location"],
 
+        "department": user["department"],
+
         "dashboard": resolve_dashboard(
             user["role"],
             user["admin_tier"]
@@ -382,7 +416,8 @@ def authenticate(username, password):
         "access_token": create_access_token(
             user["username"],
             user["role"],
-            user["admin_tier"]
+            user["admin_tier"],
+            user["department"]
         )
     }
 

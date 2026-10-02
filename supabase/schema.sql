@@ -75,6 +75,7 @@ create table if not exists users (
     admin_tier text,
     linked_person_id text,
     location text,
+    department text,
     temp_expires_at timestamptz,
     is_active boolean not null default true,
     created_at timestamptz not null default now()
@@ -83,6 +84,8 @@ create table if not exists users (
 -- Covers a project where `users` already existed before this column
 -- was added — `create table if not exists` above is a no-op there.
 alter table users add column if not exists location text;
+-- A Dean's school: scopes every Dean-visible endpoint server-side.
+alter table users add column if not exists department text;
 
 create table if not exists units (
     id bigint generated always as identity primary key,

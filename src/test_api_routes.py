@@ -428,7 +428,8 @@ if __name__ == "__main__":
 
     def _token(role, tier=None):
         return {"Authorization": "Bearer " + create_access_token(
-            f"{role}-{tier}".lower(), role, tier)}
+            f"{role}-{tier}".lower(), role, tier,
+            "School of Business" if tier == "DEAN" else None)}
 
     callers = {
         "ORIGINAL": _token("ADMIN", "ORIGINAL"),
@@ -490,6 +491,77 @@ if __name__ == "__main__":
     assert admins <= everyone
     print(f"{len(expected)} endpoints x {len(callers)} callers: "
           "each tier gets exactly its own access")
+
+    # ------------------------------------------------------------
+    # DEAN SCOPING, end to end: the department is taken from the signed
+    # token. Naming another department, or omitting it, cannot widen it.
+    # ------------------------------------------------------------
+
+    scope_connection = sqlite3.connect(temp_db_path)
+    scope_connection.execute("""
+        CREATE TABLE IF NOT EXISTS cameras (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            camera_id TEXT UNIQUE NOT NULL, name TEXT NOT NULL,
+            camera_type TEXT NOT NULL, location TEXT, department TEXT,
+            source TEXT, status TEXT NOT NULL DEFAULT 'OFFLINE',
+            enabled BOOLEAN NOT NULL DEFAULT 1, created_by TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP)""")
+    for camera_id, department in (("CAM-B", "School of Business"),
+                                  ("CAM-L", "School of Law"),
+                                  ("CAM-N", None)):
+        scope_connection.execute(
+            "INSERT INTO cameras (camera_id, name, camera_type, department) "
+            "VALUES (?, ?, 'CLASSROOM', ?)", (camera_id, camera_id, department))
+    for student_id, department in (("S-B", "School of Business"),
+                                   ("S-L", "School of Law")):
+        scope_connection.execute(
+            "INSERT INTO students (student_id, full_name, admission_number, "
+            "hostel, room, department, course, year) VALUES (?, ?, ?, 'H', "
+            "'1', ?, 'C', 1)", (student_id, student_id, "ADM-" + student_id,
+                                department))
+    scope_connection.commit()
+    scope_connection.close()
+
+    def _dean_token(department):
+        return {"Authorization": "Bearer " + create_access_token(
+            "dean", "ADMIN", "DEAN", department)}
+
+    dean = _dean_token("School of Business")
+
+    def _ids(response, key):
+        assert response.status_code == 200, response.text
+        return {row[key] for row in response.json()}
+
+    assert _ids(client.get("/cameras", headers=dean), "camera_id") == {"CAM-B"}
+    assert _ids(client.get("/cameras?department=School of Business",
+                           headers=dean), "camera_id") == {"CAM-B"}
+    assert client.get("/cameras?department=School of Law",
+                      headers=dean).status_code == 403
+    assert _ids(client.get("/dean/roster", headers=dean),
+                "student_id") == {"S-B"}
+    assert client.get("/dean/roster?department=School of Law",
+                      headers=dean).status_code == 403
+    assert client.get("/dean/summary?department=School of Law",
+                      headers=dean).status_code == 403
+    for path in ("/timetable", "/units"):
+        assert client.get(path + "?department=School of Law",
+                          headers=dean).status_code == 403
+    print("A Dean sees only their own department's cameras and roster; "
+          "naming another is refused")
+
+    no_department = _dean_token(None)
+    for path in ("/cameras", "/dean/roster", "/dean/summary", "/timetable",
+                 "/units"):
+        assert client.get(path, headers=no_department).status_code == 403
+    print("A Dean with no department on the account is refused everything")
+
+    original_view = client.get("/dean/roster", headers=admin)
+    assert {"S-B", "S-L"} <= _ids(original_view, "student_id")
+    assert _ids(client.get("/cameras", headers=admin),
+                "camera_id") == {"CAM-B", "CAM-L", "CAM-N"}
+    assert _ids(client.get("/dean/roster?department=School of Law",
+                           headers=admin), "student_id") == {"S-L"}
+    print("The Original Admin still sees every department")
 
     # The route table itself: no personal-data route may be left open to
     # "any ADMIN" — that is how the Dean/Timetabling/Temporary tiers

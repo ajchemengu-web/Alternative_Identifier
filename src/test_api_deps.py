@@ -6,6 +6,7 @@ from src.api.deps import (
     require_access,
     require_admin_tier,
     require_roles,
+    scope_department,
 )
 
 
@@ -58,7 +59,8 @@ if __name__ == "__main__":
     assert user == {
         "username": "guard1",
         "role": "GUARD",
-        "admin_tier": None
+        "admin_tier": None,
+        "department": None
     }
     print("Valid guard token -> decoded correctly. OK")
 
@@ -144,5 +146,43 @@ if __name__ == "__main__":
         403
     )
     print("A guard is not admitted via the admin-tier list. OK")
+
+    # ------------------------------------------------------------
+    # scope_department: a Dean sees their own department only
+    # ------------------------------------------------------------
+
+    dean = {"role": "ADMIN", "admin_tier": "DEAN",
+            "department": "School of Business"}
+
+    assert scope_department(dean) == "School of Business"
+    assert scope_department(dean, "School of Business") == "School of Business"
+    assert scope_department(dean, " school of business ") == "School of Business"
+    print("A Dean defaults to, and may name, their own department. OK")
+
+    _expect_http_error(lambda: scope_department(dean, "School of Law"), 403)
+    print("A Dean naming another department -> 403. OK")
+
+    for empty in (None, "", "  "):
+        _expect_http_error(
+            lambda empty=empty: scope_department(
+                {**dean, "department": empty}), 403)
+        _expect_http_error(
+            lambda empty=empty: scope_department(
+                {**dean, "department": empty}, "School of Business"), 403)
+    print("A Dean token with no department fails closed. OK")
+
+    original = {"role": "ADMIN", "admin_tier": "ORIGINAL", "department": None}
+    assert scope_department(original) is None
+    assert scope_department(original, "School of Law") == "School of Law"
+    student = {"role": "STUDENT", "admin_tier": None}
+    assert scope_department(student, "X") == "X"
+    print("Other callers are unrestricted. OK")
+
+    # A department claim on a non-Dean token must not narrow or widen
+    # anything; only role ADMIN + tier DEAN triggers scoping.
+    sneaky = {"role": "ADMIN", "admin_tier": "ORIGINAL",
+              "department": "School of Law"}
+    assert scope_department(sneaky) is None
+    print("Scoping is driven by the tier, not by a stray department. OK")
 
     print("\napi deps smoke test passed.")

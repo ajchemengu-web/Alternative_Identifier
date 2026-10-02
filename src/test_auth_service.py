@@ -20,6 +20,7 @@ def _create_users_table(path):
             admin_tier TEXT,
             linked_person_id TEXT,
             location TEXT,
+            department TEXT,
             temp_expires_at DATETIME,
             is_active INTEGER NOT NULL DEFAULT 1,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -202,6 +203,52 @@ if __name__ == "__main__":
     assert guard_login is not None
     assert guard_login["location"] == "Main Gate"
     print("Guard login carries their location ->", guard_login)
+
+    # ------------------------------------------------------------
+    # DEAN: department is mandatory, and travels in the token
+    # ------------------------------------------------------------
+
+    for bad in (None, "", "   "):
+        try:
+            auth_service.create_user(
+                username="dean_bad", password="dean-password",
+                email="dean_bad@example.com", role="ADMIN",
+                admin_tier="DEAN", department=bad
+            )
+            raise AssertionError("Expected ValueError for a Dean with no department")
+        except ValueError:
+            pass
+    print("Rejected a DEAN with no/blank department, as expected")
+
+    try:
+        auth_service.create_user(
+            username="timetabler_dept", password="timetable-password",
+            email="tt@example.com", role="ADMIN",
+            admin_tier="TIMETABLING", department="School of Business"
+        )
+        raise AssertionError("Expected ValueError for department on a non-Dean")
+    except ValueError:
+        print("Rejected a department on a non-DEAN account, as expected")
+
+    dean = auth_service.create_user(
+        username="dean_business", password="dean-password",
+        email="dean@example.com", role="ADMIN",
+        admin_tier="DEAN", department="  School of Business  "
+    )
+    assert dean["department"] == "School of Business"
+    print("Dean enrollment trims and stores the department ->", dean)
+
+    dean_login = auth_service.authenticate("dean_business", "dean-password")
+    assert dean_login["department"] == "School of Business"
+    claims = auth_service.decode_access_token(dean_login["access_token"])
+    assert claims["department"] == "School of Business"
+    assert claims["admin_tier"] == "DEAN"
+    print("Dean login puts the department in the signed token")
+
+    root_login = auth_service.authenticate("root_admin", "another-strong-password")
+    assert auth_service.decode_access_token(
+        root_login["access_token"])["department"] is None
+    print("Other accounts carry no department")
 
     os.remove(temp_db_path)
     os.rmdir(temp_dir)

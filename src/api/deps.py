@@ -93,3 +93,41 @@ def require_access(roles=(), admin_tiers=()):
         )
 
     return checker
+
+
+def scope_department(user, requested=None):
+
+    """The department a request is allowed to look at.
+
+    A Dean sees their own school only. What they ask for is checked
+    against the department signed into their token, never trusted:
+    omitting it gives their school, naming another one is refused. Any
+    other caller is returned `requested` unchanged (None = everything).
+    A Dean token with no department fails closed rather than falling
+    back to a system-wide view.
+    """
+
+    if user.get("role") != "ADMIN" or user.get("admin_tier") != "DEAN":
+
+        return requested
+
+    own = (user.get("department") or "").strip()
+
+    if not own:
+
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "This Dean account has no department assigned. Ask the "
+                "Original Admin to set one, then sign in again."
+            )
+        )
+
+    if requested and requested.strip().casefold() != own.casefold():
+
+        raise HTTPException(
+            status_code=403,
+            detail="A Dean can only view their own department."
+        )
+
+    return own
