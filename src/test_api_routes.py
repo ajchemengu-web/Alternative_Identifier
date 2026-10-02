@@ -50,6 +50,34 @@ def _extra_schema(path):
         )
     """)
 
+    # The shared enrollment-test users table is minimal (no role); erasure
+    # matches on role = 'STUDENT'.
+    connection.execute("ALTER TABLE users ADD COLUMN role TEXT")
+
+    connection.executescript("""
+        CREATE TABLE IF NOT EXISTS access_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            person_type TEXT NOT NULL, person_identifier TEXT,
+            entrance TEXT, decision TEXT
+        );
+        CREATE TABLE IF NOT EXISTS attendance_records (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            class_session_id INTEGER NOT NULL, student_id TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'ABSENT'
+        );
+        CREATE TABLE IF NOT EXISTS attendance_notifications (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            student_id TEXT NOT NULL, class_session_id INTEGER NOT NULL,
+            kind TEXT NOT NULL, unit_name TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS data_erasure_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            erasure_reference TEXT UNIQUE NOT NULL, reason TEXT NOT NULL,
+            erased_by TEXT NOT NULL, summary TEXT NOT NULL,
+            performed_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+    """)
+
     connection.commit()
     connection.close()
 
@@ -283,6 +311,107 @@ if __name__ == "__main__":
     )
     assert response.status_code == 403
     print("Re-enrolling after withdrawal needs fresh consent -> 403")
+
+    # ------------------------------------------------------------
+    # Student data erasure (Original Admin only)
+    # ------------------------------------------------------------
+
+    original = admin
+    dean = {"Authorization": "Bearer " + create_access_token(
+        "dean1", "ADMIN", "DEAN")}
+    security = {"Authorization": "Bearer " + create_access_token(
+        "sec1", "ADMIN", "SECURITY")}
+
+    # An id containing "/" — why the id travels in the query/body.
+    weird_id = "SCI/2026/001"
+    connection = sqlite3.connect(temp_db_path)
+    connection.execute(
+        "INSERT INTO students (student_id, full_name, admission_number, "
+        "hostel, room, embedding_file) "
+        "VALUES (?, 'Slash Student', 'ADM-SLASH', 'H', 'R', 'SCI-2026-001.npy')",
+        (weird_id,)
+    )
+    connection.execute(
+        "INSERT INTO access_logs (person_type, person_identifier, entrance, "
+        "decision) VALUES ('STUDENT', ?, 'Main Gate', 'VERIFIED')", (weird_id,)
+    )
+    connection.commit()
+    connection.close()
+    np.save(os.path.join(temp_embeddings_dir, "SCI-2026-001.npy"),
+            np.array([1.0, 0.0, 0.0], dtype=np.float32))
+
+    # Only the Original Admin may ask, even for the read-only summary.
+    for who, headers in [("anonymous", {}), ("student", student),
+                         ("dean", dean), ("security admin", security)]:
+        for call in (
+            lambda h: client.get("/admin/students/data-summary",
+                                 params={"student_id": weird_id}, headers=h),
+            lambda h: client.post("/admin/students/erase", headers=h, json={
+                "student_id": weird_id, "confirm": weird_id,
+                "reason": "GRADUATED"}),
+        ):
+            assert call(headers).status_code in (401, 403), who
+    print("Erasure endpoints reject anonymous, student, Dean, Security Admin")
+
+    r = client.get("/admin/students/data-summary",
+                   params={"student_id": weird_id}, headers=original)
+    assert r.status_code == 200, r.text
+    assert r.json()["access_log_entries"] == 1
+    assert r.json()["face_template"] is True
+    print("Summary works for an id containing slashes ->", r.json()["student_record"])
+
+    assert client.get("/admin/students/data-summary",
+                      params={"student_id": "NOBODY"},
+                      headers=original).status_code == 404
+
+    r = client.post("/admin/students/erase", headers=original, json={
+        "student_id": weird_id, "confirm": "something else",
+        "reason": "GRADUATED"})
+    assert r.status_code == 400, r.text
+    r = client.post("/admin/students/erase", headers=original, json={
+        "student_id": weird_id, "confirm": weird_id, "reason": "Jane asked"})
+    assert r.status_code == 400, r.text
+    print("Wrong confirm / free-text reason -> 400")
+
+    connection = sqlite3.connect(temp_db_path)
+    connection.execute(
+        "INSERT INTO watchlist_targets (target_id, full_name, status, "
+        "linked_student_id) VALUES ('TGT-HOLD', 'Slash Student', 'ACTIVE', ?)",
+        (weird_id,))
+    connection.commit()
+    connection.close()
+    r = client.post("/admin/students/erase", headers=original, json={
+        "student_id": weird_id, "confirm": weird_id, "reason": "GRADUATED"})
+    assert r.status_code == 409, r.text
+    assert r.json()["detail"]["active_watchlist_targets"] == ["TGT-HOLD"]
+    print("Active watchlist target -> 409 with the blocking ids")
+
+    connection = sqlite3.connect(temp_db_path)
+    connection.execute("UPDATE watchlist_targets SET status = 'RESOLVED'")
+    connection.commit()
+    connection.close()
+
+    r = client.post("/admin/students/erase", headers=original, json={
+        "student_id": weird_id, "confirm": weird_id, "reason": "GRADUATED"})
+    assert r.status_code == 200, r.text
+    assert r.json()["reason"] == "GRADUATED"
+    assert r.json()["erasure_reference"]
+    assert not os.path.exists(os.path.join(temp_embeddings_dir, "SCI-2026-001.npy"))
+    print("Erased over HTTP ->", r.json()["erasure_reference"])
+
+    connection = sqlite3.connect(temp_db_path)
+    assert connection.execute(
+        "SELECT COUNT(*) FROM students WHERE student_id = ?", (weird_id,)
+    ).fetchone()[0] == 0
+    assert connection.execute(
+        "SELECT COUNT(*) FROM access_logs WHERE person_identifier = ?", (weird_id,)
+    ).fetchone()[0] == 0
+    connection.close()
+
+    assert client.post("/admin/students/erase", headers=original, json={
+        "student_id": weird_id, "confirm": weird_id,
+        "reason": "GRADUATED"}).status_code == 404
+    print("Erasing again -> 404")
 
     import shutil
     shutil.rmtree(temp_dir)

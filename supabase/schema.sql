@@ -321,6 +321,17 @@ create table if not exists biometric_consents (
     withdrawn_at timestamptz
 );
 
+-- Evidence that an erasure happened, deliberately NOT identifying who it
+-- was about: no student_id, name, or free text (src/services/erasure_service.py).
+create table if not exists data_erasure_log (
+    id bigint generated always as identity primary key,
+    erasure_reference text unique not null,
+    reason text not null,
+    erased_by text not null,
+    summary text not null,
+    performed_at timestamptz not null default now()
+);
+
 create index if not exists biometric_consents_student_idx on biometric_consents (student_id, withdrawn_at);
 create index if not exists class_sessions_status_idx on class_sessions (status);
 create index if not exists attendance_records_student_idx on attendance_records (student_id);
@@ -357,3 +368,4 @@ alter table class_sessions enable row level security;
 alter table attendance_records enable row level security;
 alter table attendance_notifications enable row level security;
 alter table biometric_consents enable row level security;
+alter table data_erasure_log enable row level security;

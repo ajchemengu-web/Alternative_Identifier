@@ -21,6 +21,7 @@ from src.services import auth_service
 from src.services.enrollment_service import enroll_student_face
 from src.services import enrollment_service
 from src.services import consent_service
+from src.services import erasure_service
 from src.services.consent_service import ConsentRequiredError
 from src.services import timetable_service
 from src.services import unit_service
@@ -1713,6 +1714,85 @@ def run_retention_sweep(
         "purged_guest_ids": purged_guest_ids,
         "count": len(purged_guest_ids)
     }
+
+
+# ==========================================
+# STUDENT DATA ERASURE (docs/PRD.md §9.4)
+# ==========================================
+#
+# Original Admin only. A student's id travels in the query string /
+# request body, not the URL path: ids can contain "/" (the enrollment
+# code has to sanitise them for filenames), which would break a path
+# parameter. See src/services/erasure_service.py for exactly what is
+# and isn't erased.
+
+class ErasureRequest(BaseModel):
+
+    student_id: str
+    confirm: str
+    reason: str
+
+
+@app.get("/admin/students/data-summary")
+def get_student_data_summary(
+    student_id: str,
+    current_user: dict = Depends(
+        require_admin_tier("ORIGINAL")
+    )
+):
+
+    try:
+
+        return erasure_service.summarize_student_data(student_id)
+
+    except erasure_service.NothingToEraseError as error:
+
+        raise HTTPException(
+            status_code=404,
+            detail=str(error)
+        )
+
+
+@app.post("/admin/students/erase")
+def erase_student_data(
+    request: ErasureRequest,
+    current_user: dict = Depends(
+        require_admin_tier("ORIGINAL")
+    )
+):
+
+    try:
+
+        return erasure_service.erase_student(
+            student_id=request.student_id,
+            confirm=request.confirm,
+            reason=request.reason,
+            erased_by=current_user["username"]
+        )
+
+    except erasure_service.NothingToEraseError as error:
+
+        raise HTTPException(
+            status_code=404,
+            detail=str(error)
+        )
+
+    except erasure_service.ErasureBlockedError as error:
+
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "message": str(error),
+                "active_watchlist_targets": error.active_watchlist_targets
+            }
+        )
+
+    except ValueError as error:
+
+        raise HTTPException(
+            status_code=400,
+            detail=str(error)
+        )
 
 
 # ==========================================

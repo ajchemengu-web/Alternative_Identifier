@@ -1,3 +1,14 @@
 .env
 __pycache__/
 *.pyc
+
+# Biometric and personal data must never be committed: face templates,
+# face/visitor photos, and the local SQLite database. NOTE: this only
+# stops *new* files being added. Files already tracked stay tracked
+# until removed with `git rm -r --cached` (copy them elsewhere first —
+# untracking and pulling deletes them from working copies) and purged
+# from history. See docs/DPIA.md §7.
+data/
+*.db
+*.sqlite
+*.sqlite3

@@ -538,6 +538,34 @@ def initialize_database():
     # an audit trail of what was agreed and when.
     # =========================================
 
+    # =========================================
+    # DATA ERASURE LOG (src/services/erasure_service.py).
+    # Evidence that an erasure happened, deliberately
+    # NOT identifying who it was about: no student_id,
+    # name, or free text. The erasure_reference handed
+    # back to the admin is how the requester can later
+    # be shown their erasure was carried out.
+    # =========================================
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS data_erasure_log (
+
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+        erasure_reference TEXT UNIQUE NOT NULL,
+
+        reason TEXT NOT NULL,
+
+        erased_by TEXT NOT NULL,
+
+        summary TEXT NOT NULL,
+
+        performed_at DATETIME DEFAULT CURRENT_TIMESTAMP
+
+    )
+    """)
+
+
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS biometric_consents (
 
