@@ -101,6 +101,13 @@ body trajectory → inverse kinematics → position servos (`hexapod_sim/choreo.
 * **Not covered:** descending, turning on stairs, landings/turns, carpets,
   dynamic gaits, impact loads on the stair nose.
 
+## Product documents
+
+* [Requirements specification](docs/REQUIREMENTS.md): what the robot must do, with verification methods and traceability to these results.
+* [Manufacturing and build procedures](docs/MANUFACTURING.md): phase gates, procurement, tolerances, build, calibration, test, safety and risks.
+
+Both are drafts derived from simulation only. Items marked TBC need hardware tests.
+
 ## Layout
 
 ```
