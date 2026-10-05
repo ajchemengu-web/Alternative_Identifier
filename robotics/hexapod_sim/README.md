@@ -21,6 +21,7 @@ python run_demo.py --compare                 # mission + rolling-vs-walking ener
 MUJOCO_GL=osmesa python run_demo.py --video results/mission.mp4   # headless video
 python experiments.py                        # torque + staircase sweeps
 python experiments.py --robust 20            # 20 randomised trials
+python scale_study.py                        # actuator need vs robot size (~8 min)
 python -m pytest -q                          # kinematics + physics tests (~4 s)
 ```
 
@@ -55,7 +56,7 @@ body trajectory → inverse kinematics → position servos (`hexapod_sim/choreo.
 | Sideways drift | 1.9 cm (11 cm *without* the per-step correction) |
 | Collisions | no leg/wheel/body clashes (self-collision is simulated) |
 | Peak servo torque | femur **6.0 N·m**, tibia 4.3, coxa 4.1 |
-| Robustness | **20/20** randomised runs (friction ±30 %, payload −15…+25 %, start offset ±5 cm, heading ±3°) |
+| Robustness | 20/20 on one random draw (friction ±30 %, payload −15…+25 %, start offset ±5 cm, heading ±3°); **14/15 on a second draw**, one run reaching ≥ 15 N·m and a 78° pitch. Treat full-size success as *probable, not assured* |
 
 ### What it says about the "transformer" theory
 
@@ -70,10 +71,12 @@ body trajectory → inverse kinematics → position servos (`hexapod_sim/choreo.
   concept (16/20 cm links, wide stance) could *not* reach: on a 35° staircase
   the foot rows are 31 cm apart along the slope, which pushed rear feet 54 cm
   from the body. Links grew to 20/24 cm and the stance narrowed.
-* **Servos are the expensive part.** Peak femur torque is ~6 N·m typical and
-  9.7 N·m in the worst randomised trial: **60–100 kg·cm servos × 18**, well
-  above common hobby servos (≈ 35–45 kg·cm). Lighter bodies or quasi-direct
-  drive actuators are the way to cut this.
+* **Servos are the expensive part at full size.** Peak femur torque is ~6 N·m
+  typical, 9.7 N·m in one randomised batch and ≥ 15 N·m in another: **200 kg·cm
+  class × 18**, far above hobby servos. **Half scale needs ~15× less:** see
+  `scale_study.py` and REQUIREMENTS.md §8: at 50 % size (1.5–2.2 kg, 9 cm stairs)
+  the worst femur demand over 15 randomised runs is 0.7 N·m (≈ 7 kg·cm), with
+  15/15 successes.
 
 ## Honest limitations (read before trusting a number)
 

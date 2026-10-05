@@ -92,7 +92,7 @@ over the **worst randomised trial (femur 9.7 N·m)**, not the typical 6.0 N·m.
 
 | ID | Requirement | Basis | V | Pri |
 |---|---|---|---|---|
-| AR-001 | Femur and tibia servos shall deliver at least 12 N·m peak (about 120 kg·cm). | sim 6.0 typical / 9.7 worst, 1.25x margin | T | M |
+| AR-001 | **Full-size build only.** Femur and tibia servos shall deliver at least 20 N·m peak (about 200 kg·cm). Basis: nominal peak 6.0 N·m; worst of 20 randomised runs 9.7 N·m; but a second randomised batch (seed 1, 15 runs) had one slip event that reached the 15 N·m test clamp and pitched the body to 78 deg. The requirement therefore sits above 15 N·m, and the slip event itself is an open item (O2). | T | M |
 | AR-002 | Coxa (yaw) servos shall deliver at least 8 N·m peak. | sim 4.1 typical; 10 N·m was reached on 30 cm-tread stairs | T | M |
 | AR-003 | Each leg joint shall hold its stance load (at least 4 N·m) continuously without thermal shutdown for 10 min. | **TBC** (rig test) | T | M |
 | AR-004 | Wheel motors shall deliver at least 3 N·m and hold position when braked (hold used as foot). | `config.py` wheel limit | T | M |
@@ -102,8 +102,9 @@ over the **worst randomised trial (femur 9.7 N·m)**, not the typical 6.0 N·m.
 | AR-008 | The low-level control loop shall run at 100 Hz or faster with at most 10 ms command-to-motion latency. | sim 100 Hz | T | M |
 | AR-009 | Servos shall report current (torque) so overload and slip can be detected. | design | T | M |
 
-> **Cost driver.** The torque class in AR-001/AR-002 is well above common hobby servos (about 35-45 kg·cm).
-> Expect industrial-grade or quasi-direct-drive actuators; confirm availability and cost early (MANUFACTURING.md, risk R1).
+> **Cost driver.** At full size the torque class in AR-001/AR-002 is far above hobby servos (about 35-50 kg·cm).
+> Expect quasi-direct-drive actuators; their mass may also break the 5.8 kg budget (check data sheets).
+> The half-scale research baseline in section 8 needs only hobby-class actuators.
 
 ### 4.4 Power and energy
 
@@ -187,7 +188,7 @@ Every test records results against the requirement ID and the hardware serial/re
 | Mission success, 20/20 randomised runs | PR-001 |
 | Transform 13 s, climb 24 s | PR-003, PR-004 |
 | Lateral drift 1.9 cm with correction | PR-007, SF-003 |
-| Torque 6.0 typical / 9.7 worst, femur | AR-001 |
+| Torque 6.0 typical / 9.7 worst (20 runs) / >=15 (one slip in a second batch of 15), femur | AR-001 |
 | Reach marginal at top of stairs (up to 1.9 cm short) | MANUFACTURING.md, section 5 (link tolerances); open item O2 |
 | Servo torque sweep erratic below 5 N·m | AR-001 margin |
 
@@ -201,3 +202,37 @@ Every test records results against the requirement ID and the hardware serial/re
 | O4 | Descent is out of scope but is a likely requirement for a home robot; it changes safety analysis (SF-001, SF-003). |
 | O5 | Target market and therefore the applicable standards and regulations (candidates for confirmation: ISO 13482 personal-care robot safety, IEC 62368-1 equipment safety, EMC rules for the sale region, IEC 62133 / UN 38.3 for the battery). |
 | O6 | Whether the end product is a research platform or something sold to consumers. This changes almost every requirement in 4.6-4.9. |
+
+## 8. Research baseline: half-scale platform (proposed revision B)
+
+For research (testing whether and how the transformation works) a **half-scale robot on half-scale
+stairs** is proposed. Torque scales as size^4, so the actuator requirement drops about 16x. Evidence:
+`results/scale_study.json` (`python scale_study.py`; each row = 1 nominal run + 15 randomised runs).
+
+| Scale | Robot mass (ideal x1 / real-world guess x2-3) | Stair rise | Peak femur torque, nominal | Worst of 15 randomised | Randomised success |
+|---|---|---|---|---|---|
+| 1.00 | 5.8 kg | 18 cm | 6.0 N·m (61 kg·cm) | >=15 N·m (clamp hit) | 14/15 (one 78 deg pitch excursion) |
+| 0.75 (x2 mass) | 4.9 kg | 13.5 cm | 2.4 N·m | 4.7 N·m | 15/15, one 56 deg excursion |
+| 0.60 (x2 mass) | 2.5 kg | 10.8 cm | 1.0 N·m | 1.9 N·m | 14/15, one 72 deg excursion |
+| **0.50 (x2 mass)** | **1.5 kg** | **9 cm** | **0.47 N·m (4.8 kg·cm)** | **0.52 N·m (5.3 kg·cm)** | **15/15, pitch <= 36 deg** |
+| **0.50 (x3 mass)** | **2.2 kg** | **9 cm** | **0.65 N·m (6.6 kg·cm)** | **0.72 N·m (7.3 kg·cm)** | **15/15, pitch <= 38 deg** |
+| 0.40 (x2 mass) | 0.75 kg | 7.2 cm | 0.19 N·m | 0.21 N·m | 15/15 |
+
+Half-scale requirements (these replace the full-size values where they differ; all other requirements stand):
+
+| ID | Requirement (half-scale) | Basis |
+|---|---|---|
+| HS-001 | Test staircase 9 cm rise, 13 cm tread, at least 4 steps, at least 45 cm wide. | scale 0.5 |
+| HS-002 | Links: coxa 2 cm, femur 10 cm, tibia 12 cm (+/-0.25 mm); wheels 5 cm diameter. | scale 0.5 of section 3 |
+| HS-003 | Body about 20 x 9 x 3 cm; rover height 7 cm; spider height 10 cm. | scale 0.5 |
+| HS-004 | Mass at most 2.5 kg. | simulated up to 2.2 kg |
+| HS-005 | Leg joint actuators: at least 1.5 N·m (about 15 kg·cm) peak, 2x the worst simulated demand (0.72 N·m), with joint feedback, backlash at most 1.0 deg. | scale study |
+| HS-006 | Wheel motors: at least 0.25 N·m holding/drive. | 0.19 N·m scaled limit |
+| HS-007 | Rover speed at least 0.15 m/s. | scaled from PR-005 |
+
+**Caveats on this result.** (1) Real actuators and batteries do not shrink with size cubed, hence the
+x2 and x3 mass cases; weigh the real parts before trusting a row. (2) The gait runs at the same absolute
+timing at every scale, so smaller robots move *relatively* slower and more quasi-statically, which
+flatters them: the large-scale slip events may be partly a dynamic effect. (3) This tests the
+transformation concept on proportionally smaller stairs; it does not show the robot can climb a standard
+home staircase.

@@ -1,12 +1,14 @@
 """All design parameters in one place (SI units: m, kg, rad, N*m)."""
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 import math
 
 
 @dataclass(frozen=True)
 class RobotConfig:
+    scale: float = 1.0                       # 1.0 = reference design (see scaled())
+
     # --- torso -----------------------------------------------------------
     torso_half: tuple = (0.20, 0.09, 0.03)   # half extents of the body box
     torso_mass: float = 2.6                  # battery + electronics + frame
@@ -99,3 +101,33 @@ class StairConfig:
                 # push to whichever side is closer (above or below the edge)
                 x = e + margin if x >= e else e - margin
         return x
+
+
+def scaled(cfg: RobotConfig, st: StairConfig, k: float):
+    """Geometrically scaled copy of the design and of the staircase.
+
+    Lengths scale by k, masses by k^3 (same density), torques/gains by k^4.
+    NOTE: real actuators do not shrink with k^3, so the true mass of a small
+    robot is higher than this ideal; use `mass_factor` runs to bound that."""
+    c = cfg
+    c = replace(
+        c, scale=c.scale * k,
+        torso_half=tuple(v * k for v in c.torso_half), torso_mass=c.torso_mass * k**3,
+        hip_x=c.hip_x * k, hip_y=c.hip_y * k,
+        coxa=c.coxa * k, femur=c.femur * k, tibia=c.tibia * k,
+        coxa_mass=c.coxa_mass * k**3, femur_mass=c.femur_mass * k**3,
+        tibia_mass=c.tibia_mass * k**3, link_radius=c.link_radius * k,
+        wheel_radius=c.wheel_radius * k, wheel_width=c.wheel_width * k,
+        wheel_mass=c.wheel_mass * k**3, foot_radius=c.foot_radius * k,
+        foot_mass=c.foot_mass * k**3,
+        servo_kp=c.servo_kp * k**4, servo_kv=c.servo_kv * k**4,
+        servo_torque_limit=c.servo_torque_limit * k**4,
+        wheel_kp=c.wheel_kp * k**4, wheel_kv=c.wheel_kv * k**4,
+        wheel_torque_limit=c.wheel_torque_limit * k**4,
+        rover_height=c.rover_height * k, spider_height=c.spider_height * k,
+        rover_wheel_reach=c.rover_wheel_reach * k,
+        spider_row_x=c.spider_row_x * k, spider_row_y=c.spider_row_y * k,
+        spider_mid_y=c.spider_mid_y * k)
+    t = replace(st, x0=st.x0 * k, rise=st.rise * k, tread=st.tread * k,
+                width=st.width * k, landing=st.landing * k)
+    return c, t

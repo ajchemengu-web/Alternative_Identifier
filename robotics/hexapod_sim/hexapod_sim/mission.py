@@ -29,21 +29,22 @@ def full_mission(cfg=None, stairs=None, video=None, verbose=True,
         say(f"  [{sim.data.time:6.1f}s] {name}: {'ok' if ok else 'FAILED'}")
         return ok
 
-    x_trans = stairs.x0 - 0.45
+    k = cfg.scale
+    x_trans = stairs.x0 - 0.45 * k
     ok = stage("settle", [Phase("settle", 1.0)])
     ok = ok and stage("drive to stairs", [Phase(
-        "drive to stairs", 30.0, drive=(0.30, 0.0),
+        "drive to stairs", 30.0, drive=(0.30 * k, 0.0),
         until=lambda s: s["p"][0] >= x_trans)])
     ok = ok and stage("brake", [Phase("brake", 1.0)])
     ok = ok and stage("rover->spider", to_spider(cfg, sim.ch.body))
     if ok:
         ok = stage("climb stairs", StairClimber(
-            cfg, stairs, x_goal=stairs.landing_x + 0.35))
+            cfg, stairs, x_goal=stairs.landing_x + 0.35 * k))
     ok = ok and stage("spider->rover (top)", to_rover(cfg, sim.ch.body,
                                                       ground=stairs.top_height))
-    x_end = sim.state()["p"][0] + 0.35
+    x_end = sim.state()["p"][0] + 0.35 * k
     ok = ok and stage("drive away", [Phase(
-        "drive away", 20.0, drive=(0.25, 0.0),
+        "drive away", 20.0, drive=(0.25 * k, 0.0),
         until=lambda s: s["p"][0] >= x_end)])
     ok = ok and stage("settle (end)", [Phase("settle", 1.0)])
     return sim, marks, ok
@@ -60,8 +61,8 @@ def summarize(sim: HexapodSim, marks: dict, ok: bool) -> dict:
     rise = st.top_height
     climb_dist = float(L["p"][i1 - 1, 0] - L["p"][i0, 0]) if i1 > i0 else 0.0
     return dict(
-        success=bool(ok and abs(fin["p"][2] - (rise + cfg.rover_height)) < 0.03
-                     and fin["p"][0] > st.landing_x + 0.5),
+        success=bool(ok and abs(fin["p"][2] - (rise + cfg.rover_height)) < 0.03 * cfg.scale
+                     and fin["p"][0] > st.landing_x + 0.5 * cfg.scale),
         total_time_s=float(L["t"][-1]),
         final_position_m=[round(float(v), 3) for v in fin["p"]],
         expected_final_z_m=rise + cfg.rover_height,

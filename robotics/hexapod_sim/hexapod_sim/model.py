@@ -30,7 +30,7 @@ def _leg_xml(cfg: RobotConfig, name: str) -> str:
     if g.has_wheel:
         end = (
             f'<body name="{name}_wheel" pos="{L3} 0 0">'
-            f'<joint name="{name}_wheel" type="hinge" axis="0 1 0" damping="0.01"/>'
+            f'<joint name="{name}_wheel" type="hinge" axis="0 1 0" damping="{0.01 * cfg.scale**4:.6g}"/>'
             f'<geom name="{name}_wheel_geom" type="cylinder" '
             f'size="{cfg.wheel_radius} {cfg.wheel_width / 2}" zaxis="0 1 0" '
             f'mass="{cfg.wheel_mass}" friction="{cfg.wheel_friction} 0.02 0.002" '
@@ -43,17 +43,17 @@ def _leg_xml(cfg: RobotConfig, name: str) -> str:
     return f"""
     <body name="{name}_coxa" pos="{hx} {hy} 0" euler="0 0 {g.mount_yaw}">
       <joint name="{name}_q1" type="hinge" axis="0 0 1"
-             range="{-cfg.q1_limit} {cfg.q1_limit}" damping="0.05" armature="0.01"/>
+             range="{-cfg.q1_limit} {cfg.q1_limit}" damping="{0.05 * cfg.scale**4:.6g}" armature="{0.01 * cfg.scale**5:.6g}"/>
       <geom name="{name}_coxa_geom" type="capsule" fromto="0 0 0 {L1} 0 0"
             size="{rr}" mass="{cfg.coxa_mass}" rgba="0.35 0.35 0.4 1"/>
       <body name="{name}_femur" pos="{L1} 0 0">
         <joint name="{name}_q2" type="hinge" axis="0 -1 0"
-               range="{q2lo} {q2hi}" damping="0.05" armature="0.01"/>
+               range="{q2lo} {q2hi}" damping="{0.05 * cfg.scale**4:.6g}" armature="{0.01 * cfg.scale**5:.6g}"/>
         <geom name="{name}_femur_geom" type="capsule" fromto="0 0 0 {L2} 0 0"
               size="{rr}" mass="{cfg.femur_mass}" rgba="0.8 0.3 0.1 1"/>
         <body name="{name}_tibia" pos="{L2} 0 0">
           <joint name="{name}_q3" type="hinge" axis="0 -1 0"
-                 range="{q3lo} {q3hi}" damping="0.05" armature="0.01"/>
+                 range="{q3lo} {q3hi}" damping="{0.05 * cfg.scale**4:.6g}" armature="{0.01 * cfg.scale**5:.6g}"/>
           <geom name="{name}_tibia_geom" type="capsule" fromto="0 0 0 {L3} 0 0"
                 size="{rr * 0.9}" mass="{cfg.tibia_mass}" rgba="0.35 0.35 0.4 1"/>
           {end}
@@ -94,7 +94,7 @@ def build_xml(cfg: RobotConfig, stairs: StairConfig) -> str:
     <light pos="1 -1 3" dir="-0.2 0.3 -1" diffuse="0.6 0.6 0.6"/>
     <geom name="ground" type="plane" size="8 8 0.1" material="grid"/>
     {_stairs_xml(stairs)}
-    <body name="torso" pos="0 0 {cfg.rover_height + 0.02}">
+    <body name="torso" pos="0 0 {cfg.rover_height + 0.02 * cfg.scale}">
       <freejoint name="root"/>
       <geom name="torso_geom" type="box" size="{hx} {hy} {hz}"
             mass="{cfg.torso_mass}" rgba="0.15 0.45 0.75 1"/>

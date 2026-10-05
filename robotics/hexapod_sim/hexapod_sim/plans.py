@@ -26,7 +26,8 @@ def rover_stance_body(cfg: RobotConfig, h=None) -> dict:
             out[leg] = np.array([g.hip[0] + sx * cfg.rover_wheel_reach,
                                  g.hip[1], -h + cfg.wheel_radius])
         else:
-            out[leg] = np.array([0.0, g.side * (cfg.hip_y + 0.12), -0.05])
+            out[leg] = np.array([0.0, g.side * (cfg.hip_y + 0.12 * cfg.scale),
+                                 -0.05 * cfg.scale])
     return out
 
 
@@ -69,9 +70,9 @@ def to_spider(cfg: RobotConfig, body: BodyPose, t=1.0, ground=0.0) -> list:
               swings={l: Swing(tgt(l), 0.0) for l in MID_LEGS}),
         Phase("raise body (1/2)", 2.0 * t, body=mid),
         Phase("swing left wheels out", 3.0 * t,
-              swings={l: Swing(tgt(l), 0.06) for l in ("FL", "RL")}),
+              swings={l: Swing(tgt(l), 0.06 * cfg.scale) for l in ("FL", "RL")}),
         Phase("swing right wheels out", 3.0 * t,
-              swings={l: Swing(tgt(l), 0.06) for l in ("FR", "RR")}),
+              swings={l: Swing(tgt(l), 0.06 * cfg.scale) for l in ("FR", "RR")}),
         Phase("raise body (2/2)", 2.5 * t, body=top),
     ]
 
@@ -92,9 +93,9 @@ def to_rover(cfg: RobotConfig, body: BodyPose, t=1.0, ground=0.0) -> list:
     return [
         Phase("lower body (1/2)", 2.0 * t, body=mid),
         Phase("swing left wheels in", 3.0 * t,
-              swings={l: Swing(tgt(l, low), 0.06) for l in ("FL", "RL")}),
+              swings={l: Swing(tgt(l, low), 0.06 * cfg.scale) for l in ("FL", "RL")}),
         Phase("swing right wheels in", 3.0 * t,
-              swings={l: Swing(tgt(l, low), 0.06) for l in ("FR", "RR")}),
+              swings={l: Swing(tgt(l, low), 0.06 * cfg.scale) for l in ("FR", "RR")}),
         Phase("lower body (2/2)", 2.5 * t, body=low),
         Phase("stow middle legs", 2.5 * t,
               swings={l: Swing(tuck(l), 0.0) for l in MID_LEGS}),
@@ -139,7 +140,7 @@ def _half_cycle(cfg, st, body, feet, h, dx, half_time, pitch_limit, lift,
     for leg in group:
         nx, ny = spider[leg][0] + dx / 2, spider[leg][1]
         xt = st.valid_foothold(x_next + c * nx - sn * ny,
-                               foot_radius(cfg, leg) + 0.02)
+                               foot_radius(cfg, leg) + 0.02 * cfg.scale)
         yt = y_next + sn * nx + c * ny
         swings[leg] = Swing(np.array([xt, yt, st.height_at(xt)
                                       + foot_radius(cfg, leg)]), lift)
@@ -160,9 +161,10 @@ def _finished(cfg, st, body, feet, h, x_goal):
 def stair_climb(cfg: RobotConfig, st: StairConfig, body: BodyPose, feet: dict,
                 x_goal: float, stride: float | None = None,
                 half_time: float = 2.0, pitch_limit: float = 0.6,
-                lift: float = 0.06):
+                lift: float | None = None):
     """Open-loop alternating-tripod crawl from the current spider stance to
     x_goal (used for offline checks). Returns (phases, final_body, final_feet)."""
+    lift = 0.06 * cfg.scale if lift is None else lift
     dx = (st.tread if stride is None else stride) / 2
     feet = {k: np.array(v, float) for k, v in feet.items()}
     body = body.copy()
@@ -183,10 +185,11 @@ class StairClimber:
     measured pose, correcting lateral drift and heading."""
 
     def __init__(self, cfg, st, x_goal, stride=None, half_time=2.0,
-                 pitch_limit=0.6, lift=0.06, gain=0.5):
+                 pitch_limit=0.6, lift=None, gain=0.5):
         self.cfg, self.st, self.x_goal = cfg, st, x_goal
         self.dx = (st.tread if stride is None else stride) / 2
-        self.half_time, self.pitch_limit, self.lift = half_time, pitch_limit, lift
+        self.half_time, self.pitch_limit = half_time, pitch_limit
+        self.lift = 0.06 * cfg.scale if lift is None else lift
         self.gain = gain
         self.h = 0
 
