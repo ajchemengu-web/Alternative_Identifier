@@ -1,0 +1,6 @@
+mujoco>=3.1
+numpy>=1.26
+matplotlib>=3.8      # plots in run_demo.py
+imageio>=2.34        # video output (--video)
+imageio-ffmpeg>=0.5
+pytest>=8.0

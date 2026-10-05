@@ -1,0 +1,226 @@
+{
+  "n": 20,
+  "successes": 20,
+  "trials": [
+    {
+      "friction_scale": 1.21,
+      "torso_mass": 3.0,
+      "start_y": -0.008,
+      "start_yaw_deg": -1.4,
+      "success": true,
+      "fell": false,
+      "peak_femur": 6.26,
+      "max_pitch_deg": 34.8,
+      "max_drift_m": 0.028
+    },
+    {
+      "friction_scale": 1.01,
+      "torso_mass": 2.63,
+      "start_y": 0.028,
+      "start_yaw_deg": -1.2,
+      "success": true,
+      "fell": false,
+      "peak_femur": 6.02,
+      "max_pitch_deg": 34.9,
+      "max_drift_m": 0.028
+    },
+    {
+      "friction_scale": 0.99,
+      "torso_mass": 2.82,
+      "start_y": 0.041,
+      "start_yaw_deg": 0.0,
+      "success": true,
+      "fell": false,
+      "peak_femur": 6.14,
+      "max_pitch_deg": 34.9,
+      "max_drift_m": 0.043
+    },
+    {
+      "friction_scale": 0.87,
+      "torso_mass": 3.0,
+      "start_y": 0.012,
+      "start_yaw_deg": -1.5,
+      "success": true,
+      "fell": false,
+      "peak_femur": 6.0,
+      "max_pitch_deg": 34.9,
+      "max_drift_m": 0.021
+    },
+    {
+      "friction_scale": 1.25,
+      "torso_mass": 3.23,
+      "start_y": 0.031,
+      "start_yaw_deg": 2.4,
+      "success": true,
+      "fell": false,
+      "peak_femur": 6.32,
+      "max_pitch_deg": 34.8,
+      "max_drift_m": 0.064
+    },
+    {
+      "friction_scale": 0.89,
+      "torso_mass": 2.97,
+      "start_y": 0.04,
+      "start_yaw_deg": 1.1,
+      "success": true,
+      "fell": false,
+      "peak_femur": 5.99,
+      "max_pitch_deg": 34.9,
+      "max_drift_m": 0.056
+    },
+    {
+      "friction_scale": 0.98,
+      "torso_mass": 2.31,
+      "start_y": -0.007,
+      "start_yaw_deg": 0.7,
+      "success": true,
+      "fell": false,
+      "peak_femur": 5.74,
+      "max_pitch_deg": 34.9,
+      "max_drift_m": 0.019
+    },
+    {
+      "friction_scale": 1.25,
+      "torso_mass": 3.22,
+      "start_y": -0.002,
+      "start_yaw_deg": 2.2,
+      "success": true,
+      "fell": false,
+      "peak_femur": 6.32,
+      "max_pitch_deg": 34.8,
+      "max_drift_m": 0.028
+    },
+    {
+      "friction_scale": 0.86,
+      "torso_mass": 3.05,
+      "start_y": 0.005,
+      "start_yaw_deg": -2.9,
+      "success": true,
+      "fell": false,
+      "peak_femur": 5.88,
+      "max_pitch_deg": 35.0,
+      "max_drift_m": 0.035
+    },
+    {
+      "friction_scale": 1.13,
+      "torso_mass": 2.62,
+      "start_y": 0.032,
+      "start_yaw_deg": 1.0,
+      "success": true,
+      "fell": false,
+      "peak_femur": 6.05,
+      "max_pitch_deg": 34.9,
+      "max_drift_m": 0.047
+    },
+    {
+      "friction_scale": 0.7,
+      "torso_mass": 2.72,
+      "start_y": 0.037,
+      "start_yaw_deg": -1.5,
+      "success": true,
+      "fell": false,
+      "peak_femur": 5.24,
+      "max_pitch_deg": 35.0,
+      "max_drift_m": 0.037
+    },
+    {
+      "friction_scale": 0.9,
+      "torso_mass": 3.12,
+      "start_y": -0.031,
+      "start_yaw_deg": 0.4,
+      "success": true,
+      "fell": false,
+      "peak_femur": 6.23,
+      "max_pitch_deg": 34.9,
+      "max_drift_m": 0.031
+    },
+    {
+      "friction_scale": 0.84,
+      "torso_mass": 3.22,
+      "start_y": 0.03,
+      "start_yaw_deg": -0.3,
+      "success": true,
+      "fell": false,
+      "peak_femur": 5.59,
+      "max_pitch_deg": 34.9,
+      "max_drift_m": 0.03
+    },
+    {
+      "friction_scale": 0.75,
+      "torso_mass": 2.54,
+      "start_y": 0.001,
+      "start_yaw_deg": 2.6,
+      "success": true,
+      "fell": false,
+      "peak_femur": 5.06,
+      "max_pitch_deg": 35.0,
+      "max_drift_m": 0.037
+    },
+    {
+      "friction_scale": 0.77,
+      "torso_mass": 2.78,
+      "start_y": 0.021,
+      "start_yaw_deg": 0.3,
+      "success": true,
+      "fell": false,
+      "peak_femur": 4.8,
+      "max_pitch_deg": 35.0,
+      "max_drift_m": 0.026
+    },
+    {
+      "friction_scale": 1.19,
+      "torso_mass": 2.77,
+      "start_y": 0.046,
+      "start_yaw_deg": 0.6,
+      "success": true,
+      "fell": false,
+      "peak_femur": 6.13,
+      "max_pitch_deg": 34.8,
+      "max_drift_m": 0.056
+    },
+    {
+      "friction_scale": 1.05,
+      "torso_mass": 2.67,
+      "start_y": 0.01,
+      "start_yaw_deg": -0.7,
+      "success": true,
+      "fell": false,
+      "peak_femur": 6.05,
+      "max_pitch_deg": 34.9,
+      "max_drift_m": 0.019
+    },
+    {
+      "friction_scale": 1.05,
+      "torso_mass": 2.51,
+      "start_y": -0.031,
+      "start_yaw_deg": -1.9,
+      "success": true,
+      "fell": false,
+      "peak_femur": 6.01,
+      "max_pitch_deg": 34.9,
+      "max_drift_m": 0.057
+    },
+    {
+      "friction_scale": 1.07,
+      "torso_mass": 2.89,
+      "start_y": -0.002,
+      "start_yaw_deg": -2.5,
+      "success": true,
+      "fell": false,
+      "peak_femur": 6.2,
+      "max_pitch_deg": 34.8,
+      "max_drift_m": 0.036
+    },
+    {
+      "friction_scale": 1.15,
+      "torso_mass": 3.12,
+      "start_y": 0.042,
+      "start_yaw_deg": 2.1,
+      "success": true,
+      "fell": false,
+      "peak_femur": 9.66,
+      "max_pitch_deg": 53.1,
+      "max_drift_m": 0.071
+    }
+  ]
+}

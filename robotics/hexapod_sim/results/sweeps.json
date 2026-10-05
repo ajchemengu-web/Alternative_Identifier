@@ -1,0 +1,202 @@
+{
+  "torque_limit": {
+    "3.0": {
+      "success": true,
+      "peak_torque": {
+        "coxa": 3.0,
+        "femur": 3.0,
+        "tibia": 3.0
+      },
+      "fell": false,
+      "ik_violations": 145,
+      "max_pitch_deg": 38.4,
+      "max_roll_deg": 2.8
+    },
+    "4.0": {
+      "success": false,
+      "peak_torque": {
+        "coxa": 4.0,
+        "femur": 4.0,
+        "tibia": 4.0
+      },
+      "fell": true,
+      "ik_violations": 94,
+      "max_pitch_deg": 66.5,
+      "max_roll_deg": 63.3
+    },
+    "5.0": {
+      "success": true,
+      "peak_torque": {
+        "coxa": 3.89,
+        "femur": 5.0,
+        "tibia": 4.41
+      },
+      "fell": false,
+      "ik_violations": 87,
+      "max_pitch_deg": 34.8,
+      "max_roll_deg": 1.4
+    },
+    "6.0": {
+      "success": true,
+      "peak_torque": {
+        "coxa": 4.08,
+        "femur": 6.0,
+        "tibia": 5.93
+      },
+      "fell": false,
+      "ik_violations": 90,
+      "max_pitch_deg": 34.9,
+      "max_roll_deg": 1.4
+    },
+    "8.0": {
+      "success": true,
+      "peak_torque": {
+        "coxa": 4.08,
+        "femur": 6.04,
+        "tibia": 4.31
+      },
+      "fell": false,
+      "ik_violations": 90,
+      "max_pitch_deg": 34.9,
+      "max_roll_deg": 1.4
+    }
+  },
+  "stairs": {
+    "rise=0.15, tread=0.22": {
+      "success": true,
+      "peak_torque": {
+        "coxa": 3.16,
+        "femur": 4.28,
+        "tibia": 4.57
+      },
+      "fell": false,
+      "ik_violations": 0,
+      "max_pitch_deg": 35.6,
+      "max_roll_deg": 1.3
+    },
+    "rise=0.15, tread=0.26": {
+      "success": false,
+      "error": "stair climb did not converge"
+    },
+    "rise=0.15, tread=0.3": {
+      "success": true,
+      "peak_torque": {
+        "coxa": 10.0,
+        "femur": 5.37,
+        "tibia": 4.0
+      },
+      "fell": false,
+      "ik_violations": 0,
+      "max_pitch_deg": 28.4,
+      "max_roll_deg": 1.3
+    },
+    "rise=0.18, tread=0.22": {
+      "success": true,
+      "peak_torque": {
+        "coxa": 5.56,
+        "femur": 7.42,
+        "tibia": 4.25
+      },
+      "fell": false,
+      "ik_violations": 228,
+      "max_pitch_deg": 36.6,
+      "max_roll_deg": 1.3
+    },
+    "rise=0.18, tread=0.26": {
+      "success": true,
+      "peak_torque": {
+        "coxa": 4.07,
+        "femur": 6.03,
+        "tibia": 4.31
+      },
+      "fell": false,
+      "ik_violations": 91,
+      "max_pitch_deg": 34.9,
+      "max_roll_deg": 1.4
+    },
+    "rise=0.18, tread=0.3": {
+      "success": true,
+      "peak_torque": {
+        "coxa": 10.0,
+        "femur": 5.5,
+        "tibia": 4.34
+      },
+      "fell": false,
+      "ik_violations": 0,
+      "max_pitch_deg": 32.7,
+      "max_roll_deg": 1.5
+    },
+    "rise=0.2, tread=0.22": {
+      "success": true,
+      "peak_torque": {
+        "coxa": 6.47,
+        "femur": 8.2,
+        "tibia": 6.07
+      },
+      "fell": false,
+      "ik_violations": 373,
+      "max_pitch_deg": 37.2,
+      "max_roll_deg": 2.2
+    },
+    "rise=0.2, tread=0.26": {
+      "success": true,
+      "peak_torque": {
+        "coxa": 5.05,
+        "femur": 5.41,
+        "tibia": 4.19
+      },
+      "fell": false,
+      "ik_violations": 157,
+      "max_pitch_deg": 35.2,
+      "max_roll_deg": 1.4
+    },
+    "rise=0.2, tread=0.3": {
+      "success": true,
+      "peak_torque": {
+        "coxa": 10.0,
+        "femur": 7.17,
+        "tibia": 5.25
+      },
+      "fell": false,
+      "ik_violations": 0,
+      "max_pitch_deg": 35.4,
+      "max_roll_deg": 1.6
+    },
+    "rise=0.22, tread=0.22": {
+      "success": true,
+      "peak_torque": {
+        "coxa": 6.82,
+        "femur": 8.47,
+        "tibia": 8.12
+      },
+      "fell": false,
+      "ik_violations": 481,
+      "max_pitch_deg": 36.8,
+      "max_roll_deg": 3.3
+    },
+    "rise=0.22, tread=0.26": {
+      "success": true,
+      "peak_torque": {
+        "coxa": 6.62,
+        "femur": 8.23,
+        "tibia": 4.85
+      },
+      "fell": false,
+      "ik_violations": 206,
+      "max_pitch_deg": 38.2,
+      "max_roll_deg": 2.4
+    },
+    "rise=0.22, tread=0.3": {
+      "success": true,
+      "peak_torque": {
+        "coxa": 10.0,
+        "femur": 5.37,
+        "tibia": 5.0
+      },
+      "fell": false,
+      "ik_violations": 40,
+      "max_pitch_deg": 35.4,
+      "max_roll_deg": 1.7
+    }
+  }
+}

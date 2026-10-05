@@ -1,0 +1,19 @@
+servo torque limit sweep (N*m):
+   3.0 -> OK   {'success': True, 'peak_torque': {'coxa': 3.0, 'femur': 3.0, 'tibia': 3.0}, 'fell': False, 'ik_violations': 145, 'max_pitch_deg': 38.4, 'max_roll_deg': 2.8}
+   4.0 -> FAIL  {'success': False, 'peak_torque': {'coxa': 4.0, 'femur': 4.0, 'tibia': 4.0}, 'fell': True, 'ik_violations': 94, 'max_pitch_deg': 66.5, 'max_roll_deg': 63.3}
+   5.0 -> OK   {'success': True, 'peak_torque': {'coxa': 3.89, 'femur': 5.0, 'tibia': 4.41}, 'fell': False, 'ik_violations': 87, 'max_pitch_deg': 34.8, 'max_roll_deg': 1.4}
+   6.0 -> OK   {'success': True, 'peak_torque': {'coxa': 4.08, 'femur': 6.0, 'tibia': 5.93}, 'fell': False, 'ik_violations': 90, 'max_pitch_deg': 34.9, 'max_roll_deg': 1.4}
+   8.0 -> OK   {'success': True, 'peak_torque': {'coxa': 4.08, 'femur': 6.04, 'tibia': 4.31}, 'fell': False, 'ik_violations': 90, 'max_pitch_deg': 34.9, 'max_roll_deg': 1.4}
+staircase sweep (rise x tread, m):
+  rise 0.15 tread 0.22 -> OK   peak {'coxa': 3.16, 'femur': 4.28, 'tibia': 4.57}
+  rise 0.15 tread 0.26 -> FAIL stair climb did not converge peak 
+  rise 0.15 tread 0.30 -> OK   peak {'coxa': 10.0, 'femur': 5.37, 'tibia': 4.0}
+  rise 0.18 tread 0.22 -> OK   peak {'coxa': 5.56, 'femur': 7.42, 'tibia': 4.25}
+  rise 0.18 tread 0.26 -> OK   peak {'coxa': 4.07, 'femur': 6.03, 'tibia': 4.31}
+  rise 0.18 tread 0.30 -> OK   peak {'coxa': 10.0, 'femur': 5.5, 'tibia': 4.34}
+  rise 0.20 tread 0.22 -> OK   peak {'coxa': 6.47, 'femur': 8.2, 'tibia': 6.07}
+  rise 0.20 tread 0.26 -> OK   peak {'coxa': 5.05, 'femur': 5.41, 'tibia': 4.19}
+  rise 0.20 tread 0.30 -> OK   peak {'coxa': 10.0, 'femur': 7.17, 'tibia': 5.25}
+  rise 0.22 tread 0.22 -> OK   peak {'coxa': 6.82, 'femur': 8.47, 'tibia': 8.12}
+  rise 0.22 tread 0.26 -> OK   peak {'coxa': 6.62, 'femur': 8.23, 'tibia': 4.85}
+  rise 0.22 tread 0.30 -> OK   peak {'coxa': 10.0, 'femur': 5.37, 'tibia': 5.0}

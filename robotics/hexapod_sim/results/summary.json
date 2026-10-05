@@ -1,0 +1,81 @@
+{
+  "success": true,
+  "total_time_s": 57.55000000002437,
+  "final_position_m": [
+    2.682,
+    0.008,
+    0.857
+  ],
+  "expected_final_z_m": 0.86,
+  "peak_torque_Nm": {
+    "coxa": 4.07,
+    "femur": 6.03,
+    "tibia": 4.31
+  },
+  "torque_limit_Nm": 10.0,
+  "max_roll_deg": 1.4,
+  "max_pitch_deg": 34.9,
+  "max_lateral_drift_m": 0.019,
+  "ik_violations": 91,
+  "self_collisions": {},
+  "body_strikes": {},
+  "climb": {
+    "duration_s": 24.1,
+    "mech_J": 46.8,
+    "elec_J": 1014.6,
+    "cot_electrical": 24.6
+  },
+  "stages": {
+    "settle": {
+      "start_s": 0.0,
+      "end_s": 1.0
+    },
+    "drive to stairs": {
+      "start_s": 1.0,
+      "end_s": 3.8
+    },
+    "brake": {
+      "start_s": 3.8,
+      "end_s": 4.8
+    },
+    "rover->spider": {
+      "start_s": 4.8,
+      "end_s": 17.8
+    },
+    "climb stairs": {
+      "start_s": 17.8,
+      "end_s": 41.9
+    },
+    "spider->rover (top)": {
+      "start_s": 41.9,
+      "end_s": 54.9
+    },
+    "drive away": {
+      "start_s": 54.9,
+      "end_s": 56.6
+    },
+    "settle (end)": {
+      "start_s": 56.6,
+      "end_s": 57.6
+    }
+  },
+  "events": [],
+  "rover_vs_spider_flat": {
+    "rover": {
+      "dist_m": 1.0,
+      "time_s": 3.6,
+      "elec_J": 36.4,
+      "cot": 0.63
+    },
+    "spider": {
+      "dist_m": 1.26,
+      "time_s": 20.1,
+      "elec_J": 537.3,
+      "cot": 7.47
+    },
+    "transform_rover_to_spider": {
+      "time_s": 13.0,
+      "elec_J": 155.2
+    }
+  }
+}
